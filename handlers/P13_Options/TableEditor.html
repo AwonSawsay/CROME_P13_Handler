@@ -1,0 +1,1449 @@
+<!--
+*********************************************************************
+P13 Table Editor Page for CROME
+Auth: Awon (BiggieSmallBlock on pgmfi)
+*********************************************************************
+This page aims to allow basic viewing and editing of all tables
+in a P13 style ROM.  
+
+Note: This page does not handle table changes that were made 
+while adding expanded boost tables
+
+Changelog:
+    -v1.0   - Initial updated release - March 2026
+********************************************************************
+-->
+<html>
+<head>
+    <title>P13 Options Page v1.0</title>
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+    <style type="text/css">
+
+        body, td, th {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            color: #FFFFFF;
+        }
+
+        body {
+            background-color: #263238;
+            margin-left: 0px;
+            margin-top: 0px;
+            margin-right: 0px;
+            margin-bottom: 0px;
+        }
+    </style>
+    <link href="master.css" rel="stylesheet" type="text/css">
+    <script language="javascript">
+
+        //**********************************************************
+        var tableAddress = 0;
+        var tableEnd = 0;
+        var origByteTable = [];
+        var rawTableAry = [];
+        var valuesFromTopBoxesAry = [];
+        var valuesFromBotBoxesAry = [];
+        var topRowHeader = "Top Row";
+        var botRowHeader = "Bottom Row";
+        var tableHeader = "Table header";
+        var tableType;
+        var topRowType;
+        var botRowType;
+        var isError = false;
+        var isMismatch = false;
+        //**********************************************************
+
+        function loadDefaults() {
+        }
+
+        function keyHandler() {
+            var
+                key = window.event.keyCode;
+            //Allow only 0 through 9 '-' and '.' key press
+            if ((key < 45) || (key > 57) || key == 47) window.event.keyCode = 0;
+        }
+
+
+
+
+        //Load table defaults, set radio buttons, update display
+        function loadNewTableData(tableMenu) {
+            tableAddress = parseInt(tableMenu[0]);
+            tableEnd = parseInt(tableMenu[1]);
+            tableType = parseInt(tableMenu[2]);
+            setRadioOptionsAndHeaders(0, tableType, true);
+            topRowType = parseInt(tableMenu[3]);
+            botRowType = parseInt(tableMenu[4]);
+            setRadioOptionsAndHeaders(1, topRowType, true);
+            setRadioOptionsAndHeaders(2, botRowType, true);
+            _updateTable();
+        }
+
+        //Set the radio buttons based on input, then select / refresh the header labels
+        function setRadioOptionsAndHeaders(row, option, dontUpdate) {
+            //Set buttons in radio row 1
+            if (row == 0) {
+                switch (option) {
+                    case 0:
+                        document.getElementById('radSingle8').checked = true;
+                        document.getElementById('radBotRaw').checked = true;
+                        document.getElementById('radTopRaw').checked = true;
+                        topRowType = 0;
+                        botRowType = 0;
+                        topRowHeader = "Raw";
+                        botRowHeader = "";
+                        tableHeader = " 8-Bit Single Row";
+                        break;
+                    case 1:
+                        document.getElementById('radSingle16').checked = true;
+                        document.getElementById('radBotRaw').checked = true;
+                        document.getElementById('radTopRaw').checked = true;
+                        topRowType = 0;
+                        botRowType = 0;
+                        topRowHeader = "Raw";
+                        botRowHeader = "";
+                        tableHeader = " 16-Bit Single Row";
+                        break;
+                    case 2: document.getElementById('rad8n8').checked = true;
+                        tableHeader = " 8-Bit In, 8-Bit Out";
+                        break;
+
+                    //8 Bit in 16 Bit out
+                    case 3:
+                    case 6: //Add code to handle Vcal 3 style tables - Same as vcal 1 tables except they are done by single pairs of data. Not sequential columns
+                            //It actually seems to work fine being run like VCAL 1. 
+                        option = 3; // Temp handling for piggyback cases
+                        document.getElementById('rad8n16').checked = true;
+                        tableHeader = " 8-Bit In, 16-Bit Out";
+                        break;
+
+                    //16 Bit in , 16 Bit out
+                    case 4:
+                        option = 4; // Temp handling for piggyback cases
+                        document.getElementById('rad16n16').checked = true;
+                        tableHeader = " 16-Bit In, 16-Bit Out";
+                        break;
+                    case 5: 
+                        //This table is made up of pairs with a minimum size of 3 for 1 pair. Layout as follows
+                        // x appears to just be a place filler when there are odd numbers of pairs
+                        //  1   x   1                   -   1 Pair table
+                        //  1   2   1   2               -   2 pair
+                        //  1   2   1   2   3   x   3   -   3 Pair
+
+                        option = 5;
+                        document.getElementById('rad8n8').checked = true;
+                        tableHeader = " 8 Bit Constrained Pairs Table";
+                        break;
+
+
+                    default:
+                        break;
+                }
+                tableType = option;
+            }
+            //Set buttons in radio row 2
+            if (row == 1) {
+                switch (option) {
+                    case 0: document.getElementById('radTopRaw').checked = true;
+                        topRowHeader = "RAW";
+                        break;
+                    case 1: document.getElementById('radTopRPM').checked = true;
+                        topRowHeader = "RPM";
+                        break;
+                    case 2: document.getElementById('radTopECT').checked = true;
+                        topRowHeader = "ECT Temp F";
+                        break;
+                    case 3: document.getElementById('radTopMAP').checked = true;
+                        topRowHeader = "MAP";
+                        break;
+                    case 4: document.getElementById('radTopBARO').checked = true;
+                        topRowHeader = "BARO";
+                        break;
+                    case 5: document.getElementById('radTopTPS').checked = true;
+                        topRowHeader = "TPS %";
+                        break;
+                    case 6: document.getElementById('radTopBAT').checked = true;
+                        topRowHeader = "Battery Voltage";
+                        break;
+                    case 7: document.getElementById('radTopIGN').checked = true;
+                        topRowHeader = "Ignition Adj.";
+                        break;
+                    case 8:
+                        document.getElementById('radTopIgnRaw').checked = true;
+                        topRowHeader = "Ignition ADV";
+                        break;
+                    case 9: document.getElementById('radTop0to5v').checked = true;
+                        topRowHeader = "0-5 Volts";
+                        break;
+                    case 10: document.getElementById('radTopVSS').checked = true;
+                        topRowHeader = "Speed MPH";
+                        break;
+                    case 11: document.getElementById('radTopIAT').checked = true;
+                        topRowHeader = "IAT Temp F";
+                        break;
+                    case 122:
+                    case 12: document.getElementById('radTopMs').checked = true;
+                        topRowHeader = "Fuel mS";
+                        break;
+                    case 40:
+                    case 4000:
+                    case 80:
+                    case 8000:
+                    case 110:
+                    case 1100:
+                    case 200:
+                    case 2000:
+                    case 220:
+                        document.getElementById('radTopTrim').checked = true;
+                        topRowHeader = "Trim %";
+                        break;
+                    default: document.getElementById('radTopRaw').checked = true;
+                        topRowHeader = "Raw";
+                        break;
+                }
+                topRowType = option;
+            }
+            //Set buttons in radio row 3
+            if (row == 2) {
+                switch (option) {
+                    case 0: document.getElementById('radBotRaw').checked = true;
+                        botRowHeader = "Raw";
+                        break;
+                    case 1: document.getElementById('radBotRPM').checked = true;
+                        botRowHeader = "RPM";
+                        break;
+                    case 2: document.getElementById('radBotECT').checked = true;
+                        botRowHeader = "ECT Temp F";
+                        break;
+                    case 3: document.getElementById('radBotMAP').checked = true;
+                        botRowHeader = "MAP";
+                        break;
+                    case 4: document.getElementById('radBotBARO').checked = true;
+                        botRowHeader = "BARO";
+                        break;
+                    case 5: document.getElementById('radBotTPS').checked = true;
+                        botRowHeader = "TPS %";
+                        break;
+                    case 6: document.getElementById('radBotBAT').checked = true;
+                        botRowHeader = "Battery Voltage";
+                        break;
+                    case 7: document.getElementById('radBotIGN').checked = true;
+                        botRowHeader = "Ignition Adj";
+                        break;
+                    case 8:
+                        document.getElementById('radBotIgnRaw').checked = true;
+                        botRowHeader = "Ignition ADV";
+                        break;
+                    case 9: document.getElementById('radBot0to5v').checked = true;
+                        botRowHeader = "0-5 Volts";
+                        break;
+                    case 10: document.getElementById('radBotVSS').checked = true;
+                        botRowHeader = "Speed MPH";
+                        break;
+                    case 11: document.getElementById('radBotIAT').checked = true;
+                        botRowHeader = "IAT Temp F";
+                        break;
+                    case 122:
+                    case 12: document.getElementById('radBotMs').checked = true;
+                        botRowHeader = "Fuel mS";
+                        break;
+                    case 40:
+                    case 4000:
+                    case 80:
+                    case 8000:
+                    case 110:
+                    case 1100:
+                    case 200:
+                    case 2000:
+                    case 220:
+                        document.getElementById('radBotTrim').checked = true;
+                        botRowHeader = "Trim %";
+                        break;
+                    default:
+                        document.getElementById('radBotRaw').checked = true;
+                        botRowHeader = "Raw";
+                        break;
+                }
+                botRowType = option;
+            }
+
+            //Set headers
+            var headers = document.getElementsByTagName('th');
+            headers[0].innerHTML = tableHeader;
+            headers[1].innerHTML = topRowHeader;
+            headers[2].innerHTML = botRowHeader;
+            if (dontUpdate) return;
+            _updateTable();
+
+        }
+
+        //Convert and display data
+        function _updateTable() {
+
+            //reset error status
+            isError = false;
+
+            isMismatch = checkTableTypeVsSize(tableEnd - tableAddress, tableType);
+
+            //Read table into array
+            rawTableAry = getTableInArray(tableAddress, tableEnd, tableType);
+
+            var convTableAry = processTableData(rawTableAry, tableType, topRowType, botRowType, false);
+
+            if (isError) return;
+            //Fill text boxes with data
+            fillTextBoxes(convTableAry, parseInt(tableType));
+
+        }
+
+        //Check to see if the table size is valid for the selected table type
+        function checkTableTypeVsSize(tableSize, type) {
+
+            var mismatch = false;
+            switch (type) {
+                case 1:
+                case 2:
+                    if (tableSize % 2 != 0) mismatch = true;
+                    break;
+                case 3:
+                    if (tableSize % 3 != 0) mismatch = true;
+                    break;
+                case 4:
+                    if (tableSize % 4 != 0) mismatch = true;
+                    break;
+                default:
+                    break;
+            }
+            if (mismatch) alert("The table size does not fit the selected table type.");
+            return mismatch;
+        }
+
+        //Process data by byte / word and then convert
+        function processTableData(table, tableType, topType, botType, toRom) {
+
+            var topWord = false;
+            var botWord = true;
+            var topTable = [];
+            var botTable = [];
+            var tmpTable = [];
+            var botIndex = 0;
+            var topIndex = 0;
+
+
+            //Set top row to word for 16bit single row
+            if (tableType == 1 || tableType == 4) topWord = true;
+
+            //8 bit in and out types
+            if (tableType == 0 || tableType == 2 || tableType == 5 || tableType == 5) botWord = false;
+
+            //Use top row type for single row data
+            if (tableType == 0 || tableType == 1) botType = topType;
+
+
+            if (toRom) {
+                topTable = readTextBoxesIntoArray(true);
+                botTable = readTextBoxesIntoArray(false);
+
+            }
+            else {
+                for (var i = 0; i < table.length; i++) {
+                    if (i & 1) {
+                        botTable[botIndex] = table[i];
+                        botIndex++
+                    }
+                    else {
+                        topTable[topIndex] = table[i];
+                        topIndex++
+                    }
+
+                }
+
+            }
+
+
+            //convert top row data
+            for (var i = 0; i < topTable.length; i++) {
+                if (isError) return;
+                topTable[i] = convertData(topTable[i], topWord, topType, toRom);
+            }
+
+            //Convert Bottom row data
+            for (var i = 0; i < botTable.length; i++) {
+                if (isError) return;
+                botTable[i] = convertData(botTable[i], botWord, botType, toRom);
+            }
+
+            //Combine top and bottom converted arrays
+
+            if (toRom) {
+                return combineArraysIntoByteArray(tableType, topTable, botTable);
+            }
+            topIndex = 0;
+            botIndex = 0;
+            for (var i = 0; i < table.length; i++) {
+                if (i & 1) {
+                    tmpTable[i] = botTable[botIndex];
+                    botIndex++;
+                }
+                else {
+                    tmpTable[i] = topTable[topIndex];
+                    topIndex++;
+                }
+
+            }
+
+
+
+            return tmpTable;
+        }
+
+        //Convert data from raw to type
+        function convertData(data, word, type, toRaw) {
+            //Raw, no conversion
+            if (type == 0) {
+                if (document.getElementById('chkRawHex').checked) return "0x" + parseInt(data).toString(16).toUpperCase();
+                return data;
+            }
+
+            var trim = false;
+            var converted = 0;
+            switch (type) {
+                //RPM
+                case 1:
+                    converted = _convertRPM(data, word, toRaw);
+                    break;
+                //ECT
+                case 2:
+                    converted = _convertFarenheit(data, word, toRaw);
+                    break;
+                //MAP
+                case 3:
+                    converted = _convertMAP(data, word, toRaw);
+                    break;
+                //BARO
+                case 4:
+                    converted = _convertMAP(data, word, toRaw);
+                    break;
+                //TPS
+                case 5:
+                    converted = _convertTPS(data, word, toRaw);
+                    break;
+                //BAT
+                case 6:
+                    converted = _convertBatVolt(data, word, toRaw);
+                    break;
+                //Ignition adjustment
+                case 7:
+                    converted = _convertIgnAdj(data, word, toRaw);
+                    break;
+                //Ignition Raw
+                case 8:
+                    converted = _convertIgnRaw(data, word, toRaw);
+                    break;
+                //0-5v
+                case 9:
+                    converted = _convertLowVolt(data, word, toRaw);
+                    break;
+                //VSS
+                case 10:
+                    converted = _convertVss(data, word, toRaw);
+                    break
+                //IAT
+                case 11:
+                    converted = _convertFarenheit(data, word, toRaw);
+                    break;
+                //mS
+                case 12:
+                    converted = _convertMs(data, word, toRaw);
+                    break;
+                //mS will be divided by 2 when used
+                case 122:
+                    //** Update to work see tbl_5356
+                    if (toRaw) data = data * 2;
+                    else data = data / 2;
+                    converted = _convertMs(data, word, toRaw);
+                    break;
+                //Phase degrees
+                //Case 13:
+                //Removed
+
+                //Idle Compensation
+                case 14:
+                    //**Update when conversion is discovered, return raw for now
+                    if (document.getElementById('chkRawHex').checked) return "0x" + parseInt(data).toString(16).toUpperCase();
+                    return data;
+                    break;
+                //Trim
+                // 0x40
+                case 40:
+                    trim = true;
+                    var base = 64;
+                    break;
+                // 0x4000
+                case 4000:
+                    trim = true;
+                    var base = 16384;
+                    break;
+                // 0x80
+                case 80:
+                    trim = true;
+                    var base = 128;
+                    break;
+                // 0x8000
+                case 8000:
+                    trim = true;
+                    var base = 32768;
+                    break;
+                // 0x10
+                case 110:
+                    trim = true;
+                    var base = 16;
+                    break;
+                // 0x100
+                case 1100:
+                    trim = true;
+                    var base = 256;
+                    break;
+                // 0x200
+                case 200:
+                    trim = true;
+                    var base = 512;
+                    break;
+                // 0x2000
+                case 2000:
+                    trim = true;
+                    var base = 8192;
+                    break;
+                // 0x200 Low Byte only provided
+                case 220:
+                    var base = 512;
+                    if (!toRaw) data += base;
+                    converted = _convertTrim(data, true, toRaw, base);
+                    break;
+
+                    
+                default:
+                    converted = data;
+                    break;
+            }
+            //Convert Trim value
+            if (trim) {
+                converted = _convertTrim(data, word, toRaw, base);
+                trim = false;
+            }
+
+            return converted;
+        }
+
+        //Read raw table data into an array based on table type (word vs Byte)
+        function getTableInArray(tblAddress, endAddress, type) {
+            var topRow = true;
+            var getWord = false;
+            var tableIndex = 0;
+            var tempArray = [];
+            origByteTable = [];
+
+            //Table type 5 compat
+            var type5indexArray = [0, 1, -1, 0];
+            var indexPointer = 0;
+            var type5 = false;
+            if (type == 5) type5 = true;
+
+            var all8Bit = false;
+            var all16Bit = false;
+            //Toggle Override for All 16 bit grabs
+            if (type == 1 || type == 4) all16Bit = true;
+            //Toggle Override for All 8-Bit
+            if (type == 0 || type == 2 || type == 5) all8Bit = true;;
+
+
+            //Save an original copy of the ROM table
+            for (var i = 0; i < (endAddress - tblAddress); i++) {
+                origByteTable[i] = parseInt(window.external.rom.byteAt(tblAddress + i));
+            }
+
+            //All 16 Bit grabs
+            if (type == 1 || type == 4) getWord = true;
+
+            //Get Rom data
+            for (var i = 0; i < (endAddress - tblAddress); i++) {
+                indexPointer = i;
+                if (type5) indexPointer += type5indexArray[i % 4];
+                
+                //Grab a Byte
+                tempArray[tableIndex] = parseInt(window.external.rom.byteAt(tblAddress + indexPointer));
+                topRow = !topRow;
+
+                //Grab another byte for for 16 bit grabs
+                if (getWord && i + 1 < (endAddress - tblAddress)) {
+                    i++;
+                    indexPointer = i;
+                    tempArray[tableIndex] = tempArray[tableIndex] + (parseInt(window.external.rom.byteAt(tblAddress + indexPointer)) << 8);
+                    getWord = false;
+                }
+
+                //Toggle to alternate 8 / 16 bit grabs
+                if (!topRow) getWord = true;
+                //Override for All 16 bit grabs
+                if (all16Bit) getWord = true;
+                //Override for All 8-Bit
+                if (all8Bit) getWord = false;
+                tableIndex++;
+            }
+            return tempArray;
+
+        }
+
+        //Move data from table array into text boxes
+        function fillTextBoxes(dataTable, tblType) {
+
+            var topIndex = 0;
+            var botIndex = 0;
+            var topRow = [];
+            var botRow = [];
+            var boolTopRow = true;
+
+            var allInputs = document.getElementsByTagName("input");
+            for (var i = 0; i < allInputs.length; i++) {
+                //Get names of all top row text boxes and clear
+                if (allInputs[i].type == "text" && String(allInputs[i].id).indexOf("Top") !== -1) {
+                    topRow[topIndex] = allInputs[i];
+                    allInputs[i].value = "";
+                    allInputs[i].disabled = true;
+                    topIndex++;
+                }
+                //Get names of all bottom row text boxes and clear
+                else if (allInputs[i].type == "text" && String(allInputs[i].id).indexOf("Bot") !== -1) {
+                    botRow[botIndex] = allInputs[i];
+                    allInputs[i].value = "";
+                    allInputs[i].disabled = true;
+                    botIndex++;
+                }
+            }
+            topIndex = 0;
+            botIndex = 0;
+
+            //Fill text boxes using the prepared data array
+            for (var i = 0; i < dataTable.length; i++) {
+
+                //single row , and row is full
+                if (botIndex > botRow.length - 1) {
+                    alert("Data set is too large for display.");
+                    break;
+                }
+                //Fill top row boxes
+                if (boolTopRow) {
+                    topRow[topIndex].value = dataTable[i];
+                    topRow[topIndex].disabled = false;
+                    topIndex++;
+
+                    //not single row
+                    if (tblType != 0 && tblType != 1) boolTopRow = false;
+
+                    //single row , and top row is full. start filling bottom
+                    if (tblType == 0 && topIndex > topRow.length - 1 || tblType == 1 && topIndex > topRow.length - 1) {
+                        boolTopRow = false;
+                        var headers = document.getElementsByTagName('th');
+                        headers[2].innerHTML = "(cont.)";
+                    }
+
+                    continue;
+                }
+                //Fill bottom row boxes
+                botRow[botIndex].value = dataTable[i];
+                botRow[botIndex].disabled = false;
+                botIndex++;
+
+                //not single row
+                if (tblType != 0 && tblType != 1) boolTopRow = true;
+
+
+
+            }
+
+
+        }
+
+        //Convert text boxes and store to rom
+        function storeValuesToRom() {
+
+            //Read text boxes and convert data back to raw
+            var newTableAry = processTableData(rawTableAry, tableType, topRowType, botRowType, true);
+
+            //Conversion error, Close save
+            if (isError) return alert("Save Closed due to processing error.");
+
+            //Table size mismatch, Close save
+            if (newTableAry.length != origByteTable.length) return alert("Save operation canceled due to table length mismatch.\nOriginal table size: " + origByteTable.length + "\nNew Table size:" + newTableAry.length);
+          
+            //Debug
+            //Check that data mathces the original and prompt for saving
+            //for (var i = 0; i < origByteTable.length; i++) {
+            //    if (origByteTable[i] != newTableAry[i]) {
+            //        if (!confirm("Data mismatch:\nIndex: " + i + "\nRaw: " + origByteTable[i] + "\nNew2: " + newTableAry[i] + "\nDo you still want to save to ROM?")) return;
+            //    }
+            // }
+
+            //Save to ROM
+            writeToROM(newTableAry, tableAddress, tableEnd);
+
+            //Notify user, Refresh table display
+            alert("Changes Updated.");
+            _updateTable();
+
+        }
+
+        //Save array to ROM
+        function writeToROM(data, startAddress, stopAddress) {
+            try {
+                for (var i = 0; startAddress + i < stopAddress; i++) {
+                    window.external.rom.byteAt(startAddress + i) = data[i];
+                }
+            } catch (e) {
+                alert("Problem saving to ROM \n" + e);
+            }
+
+               
+            
+        }
+
+        //Combine top and bottom arrays together based on type
+        function combineArraysIntoByteArray(type, topAry, bottomAry) {
+            var combined = [];
+            var tIndex = 0;
+            var bIndex = 0;
+            var cIndex = 0;
+            var useTop = true;
+            var topWord = false;
+            var botWord = false;
+
+            //Set variables for type
+            if (type == 1 || type == 4) topWord = true;
+            if (type == 1 || type == 3 || type == 4) botWord = true;
+
+            switch (type) {
+                //Single row data - 1 entire row, then the next row
+                case 0:
+                case 1:
+                    //Copy entire top row into new array
+                    for (var i = 0; i < topAry.length; i++) {
+
+                        combined[cIndex] = topAry[i] & 0xff;
+
+                        if (topWord) {
+                            cIndex++;
+                            combined[cIndex] = topAry[i] >> 8;
+                        }
+
+                        cIndex++;
+                    }
+
+                    //Copy entire bottom row into new array
+                    for (var i = 0; i < bottomAry.length; i++) {
+
+                        combined[cIndex] = bottomAry[i] & 0xff;
+
+                        if (botWord) {
+                            cIndex++;
+                            combined[cIndex] = bottomAry[i] >> 8;
+                        }
+
+                        cIndex++;
+                    }
+
+                    break;
+
+                //Two row data - alternate copies between top and bottom
+                case 2:
+                case 3:
+                case 4:
+                    //8 bit
+                    var aryLength = topAry.length + bottomAry.length;
+                    if (topWord) aryLength += topAry.length;
+                    if (botWord) aryLength += bottomAry.length;
+
+
+                    for (var i = 0; i < aryLength; i++) {
+                        if (useTop) {
+                            combined[i] = Number(topAry[tIndex]) & 0xff;
+                            if (topWord && i + 1 < aryLength) {
+                                i++;
+                                combined[i] = Number(topAry[tIndex]) >> 8;
+                            }
+                            tIndex++;
+                            useTop = false;
+                            continue;
+                        }
+                        combined[i] = Number(bottomAry[bIndex]) & 0xff;
+                        if (botWord && i + 1 < aryLength) {
+                            i++;
+                            combined[i] = Number(bottomAry[bIndex]) >> 8;
+                        }
+
+                        bIndex++;
+                        useTop = true;
+                    }
+                    break;
+                case 5:
+                    //Table type 5 compat
+                    var type5indexArray = [0, 1, -1, 0];
+                    var indexPointer = 0;
+                    //8 bit constrain pairs table
+                    var aryLength = topAry.length + bottomAry.length;
+                    if (topWord) aryLength += topAry.length;
+                    if (botWord) aryLength += bottomAry.length;
+
+
+                    for (var i = 0; i < aryLength; i++) {
+                        indexPointer = i + type5indexArray[i % 4];
+
+                        if (useTop) {
+                            combined[indexPointer] = Number(topAry[tIndex]) & 0xff;
+                            if (topWord && i + 1 < aryLength) {
+                                i++;
+                                combined[i] = Number(topAry[tIndex]) >> 8;
+                            }
+                            tIndex++;
+                            useTop = false;
+                            continue;
+                        }
+                        combined[indexPointer] = Number(bottomAry[bIndex]) & 0xff;
+                        if (botWord && i + 1 < aryLength) {
+                            i++;
+                            combined[i] = Number(bottomAry[bIndex]) >> 8;
+                        }
+
+                        bIndex++;
+                        useTop = true;
+                    }
+                    break;
+                default:
+                    break;
+            }
+            return combined;
+        }
+
+        //Reads the top row and bottom row text box data into seperate arrays
+        function readTextBoxesIntoArray(returnTop) {
+            var topIndex = 0;
+            var botIndex = 0;
+            var topRowIDs = [];
+            var botRowIDs = [];
+            valuesFromBotBoxesAry = [];
+            valuesFromTopBoxesAry = [];
+
+            var allInputs = document.getElementsByTagName("input");
+            for (var i = 0; i < allInputs.length; i++) {
+                //Get names from all enabled top row text boxes
+                if (allInputs[i].type == "text" && !allInputs[i].disabled && String(allInputs[i].id).indexOf("Top") !== -1) {
+                    topRowIDs[topIndex] = allInputs[i];
+                    topIndex++;
+                }
+
+                //Get names of all bottom row text boxes and clear
+                else if (allInputs[i].type == "text" && !allInputs[i].disabled && String(allInputs[i].id).indexOf("Bot") !== -1) {
+                    botRowIDs[botIndex] = allInputs[i];
+                    botIndex++;
+                }
+            }
+
+
+            if (returnTop) {
+                for (var i = 0; i < topRowIDs.length; i++) {
+                    valuesFromTopBoxesAry[i] = Number(topRowIDs[i].value);
+                }
+                return valuesFromTopBoxesAry;
+            }
+
+
+            for (var i = 0; i < botRowIDs.length; i++) {
+                valuesFromBotBoxesAry[i] = Number(botRowIDs[i].value);
+            }
+            return valuesFromBotBoxesAry;
+        }
+
+        // Apply chnges to rom..Not implemented
+        function Apply() {
+            window.external.rom.gup();     // begin group undo
+            storeValuesToRom();
+            window.external.rom.gup();     // end group undo
+        }
+
+        //************** Conversions *********************************
+
+        //Convert 8 bit RPM
+        function _convert8BitRpm(data, word, toRaw) {
+
+            if (word) return _invalidValue(data, "Incorrect conversion for 16 Bit RPM.");
+            var dividend = 240000;
+            var divisor = 64;
+            var range = 0;
+
+            //Convert from RPM to Byte
+            if (toRaw) {
+
+                if (data > 10053) return 0xff;
+                if (data > 7862) return 0xfe;
+                if (data == 0) return 0x0;
+                if (data < 515) return 0x1;
+                if (data > 1014) range++;
+                if (data > 2000) range++;
+                if (data > 4010) range++;
+
+                dividend = dividend >> range;
+                divisor = divisor - (divisor * range)
+
+                return Math.round((dividend / (1875000 / data)) - divisor);
+            }
+
+            //Convert from byte to RPM
+            if (data > 0xff) return _invalidValue(data, "8 Bit RPM conversion (Overflow)");
+
+            range = Math.floor(data / 0x40);
+            if (data == 0xFE) return 7862;
+            if (data == 0xFF) return 10054;
+            if (data == 0x1) return 514;
+            if (data == 0x0) return 0;
+
+            dividend = dividend >> range;
+            divisor = divisor - (divisor * range)
+
+            return Math.round(1875000 / (dividend / (data + divisor)));
+        }
+
+        // Convert RPM
+        function _convertRPM(data, word, toRaw) {
+
+            //Convert 16 bit RPM to word or back
+            if (word) {
+                if (data > 0xfc8e) data = 0xffff;
+                if (data < 30) data = 1;
+				var rpm16 = Math.round((1875000 / data) );
+                return rpm16;
+            }
+
+            //8 Bit
+            return _convert8BitRpm(data, word, toRaw);
+        }
+
+        //Convert Raw to Farenheit
+        function _convertFarenheit(data, word, toRaw) {
+            if (word) return _invalidValue(data, "Can not convert 16-Bit to temperature.");
+
+            //Convert to byte
+            if (toRaw) return Math.round((120 / 0.55) - ((((data - 32) * 5) / 9) / 0.55));
+
+            //Convert byte to farenheit
+            if (data > 0xff) return _invalidValue(data, "Temperature conversion byte overflow");
+            return Math.min(0xff, Math.round((((120 - (0.55 * data)) * 9) / 5) + 32));
+
+
+
+        }
+
+        //Convert Raw to TPS
+        function _convertTPS(data, word, toRaw) {
+            if (word) return _invalidValue(data, "Can not convert 16-Bit to TPS.");
+
+            //Convert TPS percent to byte
+            if (toRaw) return _convertLowVolt((data * 5) / 100, word, toRaw);
+
+            //Convert byte to TPS percent
+            if (data > 0xff) return _invalidValue(data, "TPS conversion byte overflow");
+            return Math.round(((_convertLowVolt(data, word, toRaw) * 100) / 5) * 100) / 100;
+
+
+        }
+
+        //Convert Raw to 0-5v Volt
+        function _convertLowVolt(data, word, toRaw) {
+            if (word) {
+                if (toRaw) return Math.min(0xffff, Math.round(data * 13056) );
+                
+                if (data > 0xffff) return _invalidValue(data, "0-5v conversion word overflow");
+                return Math.round((data / 13056) * 100000) / 100000;
+                //return _invalidValue(data, "Can not convert 16-Bit to 0-5v value.");
+            }
+
+            //Convert decimal voltage to Byte
+            if (toRaw) return Math.min(0xff, Math.round(data * 51));
+
+            //Convert byte to 2 decimal voltage value
+            if (data > 0xff) return _invalidValue(data, "0-5v conversion byte overflow");
+            return Math.round((data / 51) * 100) / 100;
+        }
+
+        //Convert Raw to battery Volt
+        function _convertBatVolt(data, word, toRaw) {
+            if (word) return _invalidValue(data, "Can not convert 16-Bit to Battery Voltage.");
+
+            //Convert battery voltage to byte
+            if (toRaw) return Math.min(0xff, Math.round(data * 51 / 4.9));
+
+            //Convert byte to 2 decimal battery voltage
+            if (data > 0xff) return _invalidValue(data, "Battery voltage conversion byte overflow");
+            return Math.round(((data * 4.9) / 51) * 100) / 100;
+        }
+
+        //Convert Ignition adjustment
+        function _convertIgnAdj(data, word, toRaw) {
+            if (word && data > 0xff) {
+                return _invalidValue(data, "Can not convert 16-Bit to Ignition value.");
+            }
+            
+
+            //Convert ignition degrees to byte
+            if (toRaw) return Math.min(0xff, Math.round(data * 4 ));
+
+
+            //Convert byte to Ignition degrees
+            if (data > 0xff) return _invalidValue(data, "Ignition conversion byte overflow");
+            return Math.round((data  / 4) * 100) / 100;
+        }
+
+        //Convert Raw ignition
+        function _convertIgnRaw(data, word, toRaw) {
+            if (word) return _invalidValue(data, "Can not convert 16-Bit to Ignition value.");
+
+            //Convert ignition degrees to byte
+            if (toRaw) return Math.min(0xff, Math.round(data * 4 + 24));
+
+
+            //Convert byte to Ignition degrees
+            if (data > 0xff) return _invalidValue(data, "Ignition conversion byte overflow");
+            return Math.round(((data - 24) / 4) * 100) / 100;
+        }
+
+        //Convert Raw to VSS
+        function _convertVss(data, word, toRaw) {
+            if (word) return _invalidValue(data, "Can not convert 16-Bit to VSS value.");
+
+            //Convert VSS mph to Byte
+            if (toRaw) return Math.min(0xff, Math.round(data / 0.62137119223733));
+
+            //Convert byte to VSS mph
+            if (data > 0xff) return _invalidValue(data, "VSS conversion byte overflow");
+            return Math.round((data * 0.62137119223733) * 100) / 100;
+        }
+
+        //Convert variable trim base values to trim %
+        function _convertTrim(data, word, toRaw, base) {
+            if (word) {
+
+                //Convert trim percent to word
+                if (toRaw) return Math.min(0xFFFF, Math.round((data + 100) * base / 100));
+
+                //convert 16-Bit to trim percent
+                return Math.round( (((data * 100) / base) - 100) * 1000 ) / 1000;
+                
+            }
+
+            //Convert trim percent to byte value
+            if (toRaw) return Math.min(0xff, Math.round((data + 100) * base / 100));
+
+
+            //Convert byte to trim percent
+            if (data > 0xff) return _invalidValue(data, "8 Bit trim conversion byte overflow");
+            return Math.round( (((data * 100) / base) - 100) * 100 ) / 100;
+
+        }
+/*
+        //Converts RAW adc Map value 
+        function _convertMAP(data, word, toRaw) {
+            if (word) return _invalidValue(data, "16 Bit Map conversion not available.");
+
+            //Convert Map to 8 Bit byte
+            if (toRaw) return Math.min(0xff, Math.round(((data + 45) / 367) * 51));
+
+            //Convert byte to MAP
+            if (data > 0xff) return _invalidValue(data, "8 Bit MAP conversion byte overflow");
+            return Math.round(((data / 51) * 367) - 45);
+        }
+*/
+
+        //Converts P13 offset Map value 
+        function _convertMAP(data, word, toRaw) {
+            if (word) return _invalidValue(data, "16 Bit Map conversion not available.");
+
+            //Convert Map to 8 Bit byte
+            if (toRaw) return Math.min(0xff, Math.round((((data + 45) / 367) * 51) - 24 ) * 2);
+
+            //Convert byte to MAP
+            if (data > 0xff) return _invalidValue(data, "8 Bit MAP conversion byte overflow");
+            return Math.round((((data / 2 + 24) / 51) * 367) - 45);
+        }
+
+        //Convert milliSeconds
+        function _convertMs(data, word, toRaw) {
+            //Convert mS to 8 Bit byte
+            if (toRaw) {
+                if (word) return Math.min(0xffff, Math.round(data / 0.00400839246));
+
+                return Math.min(0xff, Math.round(data / 0.00400839246));
+                
+            }
+
+            //Convert raw to mS
+            return Math.round((data * 0.00400839246) * 1000) / 1000;
+        }
+
+        //Invalid value. Display error, return data
+        function _invalidValue(data, message) {
+            alert(message + "\n" + data + " is Invalid.");
+            isError = true;
+            return data;
+        }
+
+        //**********************************************************
+
+    </script>
+
+</head>
+<body scroll="no" onLoad="loadDefaults()">
+    <form action="" method="post" name="TableEditorfrm" id="TableEditorfrm">
+        <!--Table type radio buttons-->
+        <table width="80%">
+            <tr width="50%">
+                <td align="left" width=8%><font size="3">Table Type:&ensp;&ensp;&ensp;</font></td>
+                <td align="right" width=8%><font size="3">Single Row 8-Bit</font><input name="tableType" id="radSingle8" checked="checked" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(0,0)"></td>
+                <td align="right" width=8%><font size="3">Single Row 16-Bit</font><input name="tableType" id="radSingle16" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(0,1)"></td>
+                <td align="right" width=8%><font size="3">8-Bit in 8-Bit out</font><input name="tableType" id="rad8n8" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(0,2)"></td>
+                <td align="right" width=8%><font size="3">8-Bit in 16-Bit out</font><input name="tableType" id="rad8n16" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(0,3)"></td>
+                <td align="right" width=8%><font size="3">16-Bit in 16-Bit out</font><input name="tableType" id="rad16n16" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(0,4)"></td>
+
+            </tr>
+        </table>
+        <br />
+        <br />
+        <!--Data type Radio Buttons-->    
+        <table width="100%">
+              
+            <tr width="100%">
+                <td align="left"><font size="2">Top Row:&ensp;&ensp;&ensp;</font></td>
+                <td align="right"><font size="2">Raw</font><input name="topData" id="radTopRaw" checked="checked" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,0)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;RPM</font><input name="topData" id="radTopRPM" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,1)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;ECT</font><input name="topData" id="radTopECT" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,2)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;MAP</font><input name="topData" id="radTopMAP" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,3)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;BARO</font><input name="topData" id="radTopBARO" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,4)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;TPS</font><input name="topData" id="radTopTPS" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,5)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;BAT</font><input name="topData" id="radTopBAT" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,6)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;IGN adj</font><input name="topData" id="radTopIGN" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,7)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;IGN raw</font><input name="topData" id="radTopIgnRaw" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,8)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;0-5v</font><input name="topData" id="radTop0to5v" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,9)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;VSS</font><input name="topData" id="radTopVSS" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,10)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;IAT</font><input name="topData" id="radTopIAT" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,11)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;mS</font><input name="topData" id="radTopMs" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,12)"></td>
+                <td align="right"><font size="2">&ensp;&ensp;&ensp;Trim</font><input name="topData" id="radTopTrim" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(1,80)"></td>
+            </tr>
+                <tr></tr>
+                <tr></tr>
+                <tr>
+                    <td align="left"><font size="2">Bottom Row:&ensp;&ensp;&ensp;</font></td>
+                    <td align="right"><font size="2">Raw</font><input name="botData" id="radBotRaw" checked="checked" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,0)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;RPM</font><input name="botData" id="radBotRPM" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,1)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;ECT</font><input name="botData" id="radBotECT" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,2)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;MAP</font><input name="botData" id="radBotMAP" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,3)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;BARO</font><input name="botData" id="radBotBARO" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,4)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;TPS</font><input name="botData" id="radBotTPS" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,5)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;BAT</font><input name="botData" id="radBotBAT" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,6)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;IGN adj</font><input name="botData" id="radBotIGN" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,7)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;IGN raw</font><input name="botData" id="radBotIgnRaw" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,8)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;0-5v</font><input name="botData" id="radBot0to5v" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,9)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;VSS</font><input name="botData" id="radBotVSS" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,10)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;IAT</font><input name="botData" id="radBotIAT" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,11)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;mS</font><input name="botData" id="radBotMs" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,12)"></td>
+                    <td align="right"><font size="2">&ensp;&ensp;&ensp;Trim</font><input name="botData" id="radBotTrim" type="radio" value="checkbox" onClick="setRadioOptionsAndHeaders(2,80)"></td>
+                </tr>
+                
+            </table>
+        <br />    
+        <!-- Check Boxes-->
+        <table width ="25%">
+                <tr width ="25%">
+                    <td align="left" width=8%><font size="2">Raw Hex:&ensp;&ensp;&ensp;</font><input name="chkRawHex" id="chkRawHex"  type="checkbox" value="checkbox" onclick="_updateTable()"> </td>
+                </tr>
+        </table>
+            <br />
+            <br />
+            <table width="100%">
+                <tr width="100%"><th align="center"> Table </th></tr>
+            </table>
+            <!--Text Box table-->
+            <table width="100%" border="0">
+
+                <tr width="100%">
+                    <th width="10%"><font size="1"></font></th>
+                    <td align="left">
+                        <input name="txtTopRow1" type="text" disabled class="formObjects" id="txtTopRow1" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow2" type="text" disabled class="formObjects" id="txtTopRow2" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow3" type="text" disabled class="formObjects" id="txtTopRow3" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow4" type="text" disabled class="formObjects" id="txtTopRow4" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow5" type="text" disabled class="formObjects" id="txtTopRow5" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow6" type="text" disabled class="formObjects" id="txtTopRow6" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow7" type="text" disabled class="formObjects" id="txtTopRow7" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow8" type="text" disabled class="formObjects" id="txtTopRow8" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow9" type="text" disabled class="formObjects" id="txtTopRow9" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow10" type="text" disabled class="formObjects" id="txtTopRow10" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow11" type="text" disabled class="formObjects" id="txtTopRow11" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow12" type="text" disabled class="formObjects" id="txtTopRow12" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow13" type="text" disabled class="formObjects" id="txtTopRow13" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow14" type="text" disabled class="formObjects" id="txtTopRow14" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow15" type="text" disabled class="formObjects" id="txtTopRow15" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow16" type="text" disabled class="formObjects" id="txtTopRow16" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow17" type="text" disabled class="formObjects" id="txtTopRow17" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow18" type="text" disabled class="formObjects" id="txtTopRow18" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow19" type="text" disabled class="formObjects" id="txtTopRow19" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow20" type="text" disabled class="formObjects" id="txtTopRow20" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow21" type="text" disabled class="formObjects" id="txtTopRow21" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtTopRow22" type="text" disabled class="formObjects" id="txtTopRow22" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                    </td>
+
+                <tr width="100%">
+                    <th width="10%"><font size="1"></font></th>
+                    <td align="left">
+                        <input name="txtBotRow1" type="text" disabled class="formObjects" id="txtBotRow1" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow2" type="text" disabled class="formObjects" id="txtBotRow2" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow3" type="text" disabled class="formObjects" id="txtBotRow3" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow4" type="text" disabled class="formObjects" id="txtBotRow4" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow5" type="text" disabled class="formObjects" id="txtBotRow5" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow6" type="text" disabled class="formObjects" id="txtBotRow6" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow7" type="text" disabled class="formObjects" id="txtBotRow7" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow8" type="text" disabled class="formObjects" id="txtBotRow8" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow9" type="text" disabled class="formObjects" id="txtBotRow9" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow10" type="text" disabled class="formObjects" id="txtBotRow10" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow11" type="text" disabled class="formObjects" id="txtBotRow11" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow12" type="text" disabled class="formObjects" id="txtBotRow12" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow13" type="text" disabled class="formObjects" id="txtBotRow13" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow14" type="text" disabled class="formObjects" id="txtBotRow14" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow15" type="text" disabled class="formObjects" id="txtBotRow15" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow16" type="text" disabled class="formObjects" id="txtBotRow16" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow17" type="text" disabled class="formObjects" id="txtBotRow17" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow18" type="text" disabled class="formObjects" id="txtBotRow18" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow19" type="text" disabled class="formObjects" id="txtBotRow19" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow20" type="text" disabled class="formObjects" id="txtBotRow20" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow21" type="text" disabled class="formObjects" id="txtBotRow21" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                        <input name="txtBotRow22" type="text" disabled class="formObjects" id="txtBotRow22" size="4" maxlength="6" value="" onKeyPress="keyHandler()">
+                    </td>
+                </tr>
+            </table>
+            <table width="100%" border="0">
+
+                <tr>
+                    <td align="left"><input name="btnUpdateTable" type="button" class="formObjects" id="btnUpdateTable" value="Update Table" onClick="_updateTable()"></td>
+                    <td height="35" align="center"><input name="btnClose" type="button" class="formObjects" id="btnClose" onClick="window.close()" value="Close">&nbsp;<input name="btnApply" type="button" class="formObjects" id="btnApply" value="  Apply  " onClick="Apply()">&nbsp;&nbsp;</td>
+
+                </tr>
+            </table>
+            <table width="100%" border="0">
+                <tr>
+                    <th align="left"> Choose a Table:</th>
+
+                </tr>
+
+                <tr width="100%">
+                    <td align="left" width="100%">
+                        <label for="tableMenu"></label>
+                        <select name="tableMenu" id="tableMenu" onfocus='this.size=10' onblur='this.size=1' onchange="loadNewTableData(tableMenu.value.split(','))" place>
+                            <option value="0,0,0,0,0">----------------------------------- Main Ignition Tables--------------------------------------------</option>
+                            <option value="0x510a,0x511e,0,8,0">[Tbl_510a] - MinIgnValuePerRow_HiCam_LowDwell</option>
+                            <option value="0x511e,0x5132,0,8,0">[Tbl_511e] - MinIgnValuePerRow_HiCam_HighDwell</option>
+                            <option value="0x5132,0x5146,0,8,0">[Tbl_5132] - MinIgnValuePerRow_LoCam_LowDwell</option>
+                            <option value="0x5146,0x515a,0,8,0">[Tbl_5146] - MinIgnValuePerRow_LoiCam_HighDwell</option>
+                            <option value="0x5000,0x502c,2,1,0">[Tbl_5000] - DwellBaseValues</option>
+                            <option value="0x502c,0x5046,2,6,40">[Tbl_502c] - DwellByVoltageOffset</option>
+                            <option value="0x5046,0x5072,2,1,7">[Tbl_5046] - DwellDegreesPerRPM</option>
+                            <option value="0,0,0,0,0">----------------------------------- Ignition Adjustments -------------------------------------------</option>
+                            <option value="0x5086,0x5094,2,2,7">[Tbl_5086] - ECT_MAX_IgnitionRetard</option>
+                            <option value="0x5094,0x50a2,2,2,7">[Tbl_5094] - ECT_MIN_IgnitionRetard</option>
+                            <option value="0x50a2,0x50b0,2,2,7">[Tbl_50a2] - ECT_MAX_IgnitionAdvance</option>
+                            <option value="0x50b0,0x50be,2,2,7">[Tbl_50b0] - ECT_MIN_IgnitionAdvance</option>
+                            <option value="0x5082,0x5086,5,3,3">[Tbl_5082] - ECTIgnAdj_ConstrainedMAPIndex</option>
+                            <option value="0x5803,0x580d,2,11,7">[Tbl_5803] - IATIgnAdj_MAX_Adjustment</option>
+                            <option value="0x580d,0x5817,2,11,7">[Tbl_580d] - IATIgnAdj_MIN_Adjustment</option>
+                            <option value="0x5800,0x5803,5,3,3">[Tbl_5800] - IATIgnAdj_ConstrainedMAPIndex</option>
+                            <option value="0x5072,0x507e,2,2,7">[Tbl_5072] - VehMovingRPMOver1000_IgnAdjLimit</option>
+                            <option value="0x507e,0x5082,5,3,3">[Tbl_507e] - VehMovingRPMOver1000IgnAdj_ConstrainedMapIndex</option>
+                            <option value="0x6a4b,0x6a4f,2,11,80">[Tbl_6a4b] - VehMovingRPMOver1000_IATAdjustment</option>
+                            <option value="0x50f0,0x50fa,2,1,5">[Tbl_50f0] - ThrottleOpenDuringStartIgnitionDelay_TPSThreshold</option>
+                            <option value="0x517b,0x518f,0,7,0">[Tbl_517b] - IgnitionAdjByRow_HighCam</option>
+                            <option value="0x518f,0x51a3,0,7,0">[Tbl_518f] - IgnitionAdjByRow_LowCam</option>
+                            <option value="0x50fa,0x5102,2,10,8">[Tbl_50fa] - AutoShiftLockupIgnition?_Base</option>
+                            <option value="0x5102,0x510a,2,10,8">[Tbl_5102] - AutoShiftLockupIgnition?_Offset</option>
+                            <option value="0,0,0,0,0">----------------------------------- Injector Tables ------------------------------------------------</option>
+                            <option value="0x51a3,0x51ac,0,0,0">[Tbl_51a3] - InjectorPhasing</option>
+                            <option value="0x52df,0x52e3,0,80,0">[Tbl_52df] - InjectorAdjTable</option>
+                            <option value="0x52fb,0x5310,3,6,12">[Tbl_52fb] - InjectorDeadTime</option>
+                            <option value="0,0,0,0,0">----------------------------------- Main Fuel Tables -----------------------------------------------</option>
+                            <option value="0x605a,0x606e,0,0,0">[Tbl_605a] - MainFuelBaseMultipliers_LowCam</option>
+                            <option value="0x606e,0x6082,0,0,0">[Tbl_606e] - MainFuelBaseAddons_LowCam</option>
+                            <option value="0x6082,0x6096,0,0,0">[Tbl_6082] - MainFuelBaseMultipliers_HighCam</option>
+                            <option value="0x6096,0x60aa,0,0,0">[Tbl_6096] - MainFuelBaseAddons_HighCam</option>
+                            <option value="0x51c1,0x51cf,2,2,40">[Tbl_51c1] - MinFuelTrim_OpenLoop_MIN</option>
+                            <option value="0x51cf,0x51dd,2,2,40">[Tbl_51cf] - MinFuelTrim_OpenLoop_MAX</option>
+                            <option value="0x51dd,0x51eb,2,2,40">[Tbl_51dd] - MinFuelTrim_CloseLoop_MIN</option>
+                            <option value="0x51eb,0x51f9,2,2,40">[Tbl_51eb] - MinFuelTrim_CloseLoop_MAX</option>
+                            <option value="0x51b9,0x51c1,5,3,3">[Tbl_51b9] - MinFuelTrim_ConstrainedMapIndex</option>
+                            <option value="0x6911,0x6921,2,1,5">[Tbl_6911] - MinFuelTrimBypass_TPSThresholds</option>
+                            <option value="0x5267,0x5277,2,1,3">[Tbl_5267] - MinFuelTrimBypass_MAPThreshold</option>
+                            <option value="0x5287,0x528b,2,4,0">[Tbl_5287] - MinFuelTrimBypass_MAPThreshold_BaroOffset</option>
+                            <option value="0x6a4f,0x6a63,0,3,0">[Tbl_6a4f] - MinimumMAPForFuelLookup_LowCam</option>
+                            <option value="0x6a63,0x6a77,0,3,0">[Tbl_6a63] - MinimumMAPForFuelLookup_HighCam</option>
+                            <option value="0x51ac,0x51b3,0,110,0">[Tbl_51ac] - InitialMAPChangeAdjustments</option>
+                            <option value="0x51b3,0x51b9,2,3,0">[Tbl_51b3] - InitialMAPChangeDeltaThresholds</option>
+                            <option value="0x5356,0x5364,2,2,122">[Tbl_5356] - InitialMAPChangeFuelAdjTbl_GoingUP</option>
+                            <option value="0x5364,0x5372,2,2,122">[Tbl_5364] - InitialMAPChangeFuelAdjTbl_GoingDown</option>
+                            <option value="0x6921,0x6923,0,0,0">[Tbl_6921] - MaximumFuelTrimThreshold</option>
+                            <option value="0,0,0,0,0">----------------------------------- Fuel Adjustments -----------------------------------------------</option>
+                            <option value="0x5215,0x522a,3,11,8000">[Tbl_5215] - IATFuelAdjustment</option>
+                            <option value="0x528b,0x5297,2,2,80">[Tbl_528b] - HotECTFuelTrim</option>
+                            <option value="0x52e3,0x52ef,2,4,220">[Tbl_52e3] - BaroFuelAdjustment</option>
+                            <option value="0x52ef,0x52fb,2,3,220">[Tbl_52ef] - BaroFuelAdjustment_MAPOffset</option>
+                            <option value="0x6923,0x6937,0,80,0">[Tbl_6923] - UnusedRPMRowBaseFuelAdjTable</option>
+                            <option value="0x6937,0x694b,0,80,0">[Tbl_6937] - UnusedRPMRowBaseFuelAdjTable</option>
+                            <option value="0,0,0,0,0">----------------------------------- Tip In Tables --------------------------------------------------</option>
+                            <option value="0x5176,0x517b,0,80,0">[Tbl_5176] - TipInIgnAdjByGearTrim</option>
+                            <option value="0x5207,0x5215,2,2,40">[Tbl_5207] - TipInFuelAdjustment_ECTBase</option>
+                            <option value="0x515a,0x5168,2,1,5">[Tbl_515a] - TipinIgnitionTPSThreshold</option>
+                            <option value="0x5168,0x5176,2,1,7">[Tbl_5168] - TipinIgntionAdjustmentPerRPM</option>
+                            <option value="0x50be,0x50c8,2,1,5">[Tbl_50be] - TipIn_InitialTPSThresholdFor_IAT_IGNAdj</option>
+                            <option value="0x5310,0x532e,6,0,12">[Tbl_5310] - TipInFuelAddon_TPSDeltaVsRawFuel</option>
+                            <option value="0x532e,0x5346,6,0,80">[Tbl_532e] - TipInByGear_TPSDeltaVsFuelTrim</option>
+                            <option value="0x5346,0x534a,2,4,80">[Tbl_5346] - TipInFuelTrim_BaroAdj</option>
+                            <option value="0x534a,0x5356,2,2,80">[Tbl_534a] - TipInFuelAddon_ECTOffset</option>
+                            <option value="0,0,0,0,0">----------------------------------- Closed Loop Tables ---------------------------------------------</option>
+                            <option value="0x523f,0x5243,2,11,2">[Tbl_523f] - CloseLoopECTThresholdUnder10MPH_IATBased</option>
+                            <option value="0x5243,0x5247,2,11,2">[Tbl_5243] - CloseLoopECTThresholdOver10MPH_IATBased</option>
+                            <option value="0x5247,0x5249,0,0,0">[Tbl_5247] - ClosedLoopValue</option>
+                            <option value="0x5249,0x5253,1,0,0">[Tbl_5249] - ClosedLoop5SpdTbl</option>
+                            <option value="0x5253,0x525d,1,0,0">[Tbl_5253] - ClosedLoopAutoTbl</option>
+                            <option value="0x525d,0x5262,0,0,0">[Tbl_525d] - ClosedLoop5SpdTbl2</option>
+                            <option value="0x5262,0x5267,0,0,0">[Tbl_5262] - ClosedLoopAutoTbl2</option>
+                            <option value="0,0,0,0,0">----------------------------------- OverRun Tables -------------------------------------------------</option>
+                            <option value="0x5297,0x52a5,2,2,1">[Tbl_5297] - OverRunRPM_Cut_5Speed</option>
+                            <option value="0x52a5,0x52b3,2,2,1">[Tbl_52a5] - OverRunRPM_Resume_5Speed</option>
+                            <option value="0x52b3,0x52c1,2,2,1">[Tbl_52b3] - OverRunRPM_Cut_Auto</option>
+                            <option value="0x52c1,0x52cf,2,2,1">[Tbl_52c1] - OverRunRPM_Resume_Auto</option>
+                            <option value="0x5397,0x53a5,2,2,1">[Tbl_5397] - OverRunResumeRPM_5Speed</option>
+                            <option value="0x53a5,0x53b3,2,2,1">[Tbl_53a5] - OverRunResumeRPM_Auto</option>
+                            <option value="0x53b3,0x53c1,2,2,1">[Tbl_53b3] - OverRunCutRPM_5Speed</option>
+                            <option value="0x53c1,0x53cf,2,2,1">[Tbl_53c1] - OverRunCutRPM_Auto</option>
+                            <option value="0x53cf,0x53db,2,1,3">[Tbl_53cf] - OverRun_MapThresholdRPMIndex_LoCam</option>
+                            <option value="0x53db,0x53e7,2,1,3">[Tbl_53db] - OverRun_MapThresholdRPMIndex_HiCam</option>
+                            <option value="0x53e7,0x53f3,2,1,3">[Tbl_53e7] - OverRun_MapThresholdRPMIndex_LoCam_Fault</option>
+                            <option value="0x53f3,0x53ff,2,1,3">[Tbl_53f3] - OverRun_MapThresholdRPMIndex_HiCam_Fault</option>
+                            <option value="0x53ff,0x5403,2,4,3">[Tbl_53ff] - OverRunMapThreshold_BaroOffset</option>
+                            <option value="0x574b,0x574f,2,5,1">[Tbl_574b] - TPSVacFuelCutTable?</option>
+                            <option value="0,0,0,0,0">----------------------------------- Starting / Post Fuel--------------------------------------------</option>
+                            <option value="0x522a,0x523f,3,2,2000">[Tbl_522a] - InitialPostFuelTable_ECTBased</option>
+                            <option value="0x537a,0x538f,3,2,12">[Tbl_537a] - RawCrankingFuel_ECTIndex</option>
+                            <option value="0x5393,0x5397,2,4,80">[Tbl_5393] - BaroStartingFuelAdjTbl</option>
+                            <option value="0x6a2a,0x6a3a,4,1,80">[Tbl_6a2a] - CrankingFuelTrim</option>
+                            <option value="0,0,0,0,0">----------------------------------- EGR Tables------------------------------------------------------</option>
+                            <option value="0x6a3a,0x6a46,2,1,9">[Tbl_6a3a] - EGRScanToolTable</option>
+                            <option value="0x5372,0x5376,2,0,0">[Tbl_5372] - EGRFuelIgnControlDelayTable1</option>
+                            <option value="0x5376,0x537a,2,0,0">[Tbl_5376] - EGRFuelIgnControlDelayTable2</option>
+                            <option value="0,0,0,0,0">----------------------------------- Rev Limits -----------------------------------------------------</option>
+                            <option value="0x5403,0x5407,4,1,0">[Tbl_5403] - RevCut_LowCamRestart</option>
+                            <option value="0x5407,0x540b,4,1,0">[Tbl_5407] - RevCut_LowCamLimit</option>
+                            <option value="0x540b,0x540f,4,1,0">[Tbl_540b] - RevCut_HighCamRestart</option>
+                            <option value="0x540f,0x5413,4,1,0">[Tbl_540f] - RevCut_HighCamLimit</option>
+                            <option value="0,0,0,0,0">----------------------------------- Idle Tables ----------------------------------------------------</option>
+                            <option value="0x50c8,0x50dc,4,0,7">[Tbl_50c8] - LowIdleIgnControl</option>
+                            <option value="0x50dc,0x50f0,4,0,7">[Tbl_50dc] - HiIdleIgnControl</option>
+                            <option value="0x559b,0x55a5,2,2,220">[Tbl_559b] - AlternatorIdleControl_AdjTrim</option>
+                            <option value="0x55a5,0x55af,2,1,40">[Tbl_55a5] - AltFieldIdleIndexMultiplier_RPMIndex</option>
+                            <option value="0x55af,0x55c1,3,9,14">[Tbl_55af] - AlternatorIdleAdjustment_Raw</option>
+                            <option value="0x55c1,0x55d0,3,11,8000">[Tbl_55c1] - AC_IATIdleCompensation</option>
+                            <option value="0x55d0,0x55da,2,1,14">[Tbl_55d0] - AC_IdleCompensationTbl</option>
+                            <option value="0x5554,0x5556,1,14,0">[Tbl_5554] - MainIdleCompensationMIN</option>
+                            <option value="0x5556,0x5558,1,14,0">[Tbl_5556] - MainIdleCompensationMAX</option>
+                            <option value="0x545f,0x547a,3,2,14">[Tbl_545f] - MainIdleCompensation1_5Spd</option>
+                            <option value="0x55da,0x55f5,3,2,14">[Tbl_55da] - ECTIdleCompensation</option>
+                            <option value="0x547a,0x5495,3,2,14">[Tbl_547a] - MainIdleCompensation1_Auto</option>
+                            <option value="0x5495,0x54b0,3,2,14">[Tbl_5495] - MainIdleCompensation2_5Spd</option>
+                            <option value="0x54b0,0x54cb,3,2,14">[Tbl_54b0] - MainIdleCompensation2_Auto</option>
+                            <option value="0x54cb,0x54e6,3,2,14">[Tbl_54cb] - MainIdleCompensation3_5Spd</option>
+                            <option value="0x54e6,0x5501,3,2,14">[Tbl_54e6] - MainIdleCompensation3_Auto</option>
+                            <option value="0x5501,0x550f,2,2,1">[Tbl_5501] - IdleRelatedRPMThresholdBasedOnECTTemp2</option>
+                            <option value="0x550f,0x551d,2,2,1">[Tbl_550f] - IdleRelatedRPMThresholdBasedOnECTTemp1</option>
+                            <option value="0x551d,0x5532,3,2,1">[Tbl_551d] - StartupIdleRPM_1_ECTIndex</option>
+                            <option value="0x5532,0x5547,3,2,1">[Tbl_5532] - StartupIdleRPM_2_ECTIndex</option>
+                            <option value="0x5558,0x555a,1,14,0">[Tbl_5558] - DefaultIdleCompensation_Auto</option>
+                            <option value="0x555a,0x555c,1,14,0">[Tbl_555a] - DefaultIdleCompensation_5Spd</option>
+                            <option value="0x555c,0x556a,2,2,1">[Tbl_555c] - IdleRelated_RPMThreshold_EctIndex</option>
+                            <option value="0x556a,0x557f,3,2,0">[Tbl_556a] - IdleRelated_RPMDeltaThreshold_ECTIndex</option>
+                            <option value="0x557f,0x558d,2,2,0">[Tbl_557f] - IdleRelated_CountdownValues_ECTIndex</option>
+                            <option value="0x558d,0x559b,2,2,0">[Tbl_558d] - IdleRelated_RPMDeltaMultiplier</option>
+                            <option value="0x55f5,0x5609,4,1,14">[Tbl_55f5] - TargetRPMIdleCompensation</option>
+                            <option value="0x5624,0x563c,3,1,14">[Tbl_5624] - RollingIdleIACVTable_LowCam</option>
+                            <option value="0x563c,0x5654,3,1,14">[Tbl_563c] - RollingIdleIACVTable_HighCam</option>
+                            <option value="0x5654,0x5658,2,4,80">[Tbl_5654] - BARO_IACVTrimTable</option>
+                            <option value="0x5658,0x5673,3,2,14">[Tbl_5658] - IdleCompensationBASE_5Speed</option>
+                            <option value="0x5673,0x568e,3,2,14">[Tbl_5673] - IdleCompensationBASE_Auto</option>
+                            <option value="0x568e,0x56b6,4,14,9">[Tbl_568e] - IACVTargetCurrentTable</option>
+                            <option value="0x6902,0x6911,3,1,14">[Tbl_6902] - VehMovingRPMBaseIdleAdjustment</option>
+                            <option value="0x69f4,0x6a02,2,2,0">[Tbl_69f4] - IdleRPMThresholdECTOffset_69f4</option>
+                            <option value="0x5547,0x554a,0,0,0">[Tbl_5547] - UnknownIdleIACVTable1</option>
+                            <option value="0x554a,0x554d,0,0,0">[Tbl_554a] - UnknownIdleIACVTable2</option>
+                            <option value="0x554d,0x5550,0,0,0">[Tbl_554d] - UnknownIdleIACVTable3</option>
+                            <option value="0x5550,0x5554,0,0,0">[Tbl_5550] - UnknownIdleIACVTable4</option>
+                            <option value="0,0,0,0,0">----------------------------------- Scalars --------------------------------------------------------</option>
+                            <option value="0x6000,0x6028,1,1,0">[Tbl_6000] - LowCamRPMScalarTable</option>
+                            <option value="0x6028,0x6050,1,1,0">[Tbl_6028] - HighCamRPMScalarTable</option>
+                            <option value="0x6050,0x605a,0,3,0">[Tbl_6050] - MAP_Scalars</option>
+                            <option value="0,0,0,0,0">----------------------------------- Fault Handling -------------------------------------------------</option>
+                            <option value="0x69e6,0x69f4,2,2,40">[Tbl_69e6] - CriticalFaultECTFuelTrim</option>
+                            <option value="0x5736,0x573a,2,5,3">[Tbl_5736] - MAPFaultTPSLookupTbl</option>
+                            <option value="0x573a,0x573f,0,2,0">[Tbl_573a] - ECTFaultValueTable</option>
+                            <option value="0x573f,0x5745,6,6,9">[Tbl_573f] - IACVFaultThresholdTable1</option>
+                            <option value="0x5745,0x574b,6,6,9">[Tbl_5745] - IACVFaultThresholdTable2</option>
+                            <option value="0x63f2,0x63f8,0,8,0">[Tbl_63f2] - AlternateIgnitionFaultTable</option>
+                            <option value="0x694b,0x6960,3,1,0">[Tbl_694b] - CriticalFaultFuelRPMDeltaThresholds</option>
+                            <option value="0,0,0,0,0">----------------------------------- Knock Tables ---------------------------------------------------</option>
+                            <option value="0x6a02,0x6a16,0,7,0">[Tbl_6a02] - KnockHiCamLookupTable_6a02</option>
+                            <option value="0x6a16,0x6a2a,0,7,0">[Tbl_6a16] - KnockLowCamLookupTable_6a16</option>
+                            <option value="0x6a77,0x6a8b,0,80,0">[Tbl_6a77] - KnockFuelTrim_LowCam</option>
+                            <option value="0x6a8b,0x6a9f,0,80,0">[Tbl_6a8b] - KnockFuelTrim_HighCam</option>
+                            <option value="0,0,0,0,0">----------------------------------- Traction Control -----------------------------------------------</option>
+                            <option value="0x51f9,0x5207,2,2,40">[Tbl_51f9] - MinFuelTrim_TCS</option>
+                            <option value="0x699c,0x69b0,0,8,0">[Tbl_699c] - MinIgnValue_TCSLowCam_LowDwell</option>
+                            <option value="0x69b0,0x69c6,0,9,0">[Tbl_69b0] - TCS_ADCThresholds</option>
+                            <option value="0x5817,0x5827,2,3,80">[Tbl_5817] - TCS_FuelMultiplierTable_LowCam</option>
+                            <option value="0x5827,0x5837,2,3,80">[Tbl_5827] - TCS_FuelMultiplierTable_HighCam</option>
+                            <option value="0x56e4,0x570e,3,2,12">[Tbl_56e4] - TCS_InjectorAdjustment</option>
+                            <option value="0x570e,0x5722,0,7,0">[Tbl_570e] - TCSIgnitionAdjTable_LoCam</option>
+                            <option value="0x5722,0x5736,0,7,0">[Tbl_5722] - TCSIgnitionAdjTable_HiCam</option>
+                            <option value="0x69c6,0x69e6,0,0,0">[Tbl_69c6] - TCS_InjectorRelated</option>
+                            <option value="0x6960,0x6974,0,7,0">[Tbl_6960] - TCSDeactivatingIgnitionAdjTable_LoCam</option>
+                            <option value="0x6974,0x6988,0,7,0">[Tbl_6974] - TCSDeactivatingIgnitionAdjTable_HiCam</option>
+                            <option value="0x6988,0x699c,0,8,0">[Tbl_6988] - MinIgnValue_TCSHiCam_LowDwell</option>
+                            <option value="0,0,0,0,0">----------------------------------- RP Hardware Jumpers --------------------------------------------</option>
+                            <option value="0x6a9f,0x6ab7,1,0,0">[Tbl_6a9f] - RP13_14_CloseLoopAdj_MapUNDER0x77_Auto</option>
+                            <option value="0x6ab7,0x6acf,1,0,0">[Tbl_6ab7] - RP13_14_CloseLoopAdj_MapUNDER0x77_5Spd</option>
+                            <option value="0x542b,0x5443,1,0,0">[Tbl_542b] - RP13_14_CloseLoopAdj_MapOver0x77_Auto</option>
+                            <option value="0x5443,0x545b,1,0,0">[Tbl_5443] - RP13_14_CloseLoopAdj_MapOver0x77_5Spd</option>
+                            <option value="0x6a46,0x6a4b,0,80,0">[Tbl_6a46] - RP9_10_EGRAdjustmentTable</option>
+                            <option value="0x5413,0x542b,1,8000,0">[Tbl_5413] - RP1_2_FuelTrimTable</option>
+                            <option value="0,0,0,0,0">----------------------------------- Special --------------------------------------------------------</option>
+                            <option value="0x6d53,0x6d56,0,0,0">[Tbl_6d53] - ECU_ID</option>
+                            <option value="0x57b7,0x57c3,1,1,0">[Tbl_57b7] - 8BitRPMConversionThresholds</option>
+                            <option value="0x545b,0x545f,0,0,0">[Tbl_545b] - CurrentGearTable</option>
+                            <option value="0x56b6,0x56c6,2,1,3">[Tbl_56b6] - VTECMapThresholdTable</option>
+                            <option value="0x57c3,0x57db,0,0,0">[Tbl_57c3] - CKPTriggerTable</option>
+                            <option value="0,0,0,0,0">----------------------------------- Unknown --------------------------------------------------------</option>
+                            <option value="0x576f,0x5775,0,0,0">[Tbl_576f] - UnknownValuesFor_1a0To1aa_1</option>
+                            <option value="0x5775,0x577f,0,0,0">[Tbl_5775] - UnknownValuesFor_1a0To1aa_2</option>
+                            <option value="0x574f,0x576f,0,0,0">[Tbl_574f] - WRONG_ADDRESS_UnknownCountdownValues</option>
+                            <option value="0x57b0,0x57b7,0,2,0">[Tbl_57b3] - FALSE_ECTThresholdsFor223hLowBits</option>
+
+                        </select>
+
+
+                    </td>
+
+
+                </tr>
+            </table>
+</form>
+</body>
+</html>

@@ -1,0 +1,376 @@
+<!--
+*********************************************************************
+P13 Options Page for CROME
+Auth: Awon (BiggieSmallBlock on pgmfi)
+*********************************************************************
+This is the page that will open when the Options tab or (F4) are 
+pressed in crome. This page is the main interface to edit all options
+currently available on the P13.
+
+Changelog:
+    -v2.0   - Initial updated release - March 2026
+********************************************************************
+-->
+<html>
+<head>
+    <meta id="P13_HTML_VERSION" data-version="2.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+    <title>P13 Options Page </title>
+    <style type="text/css">
+        body,
+        td,
+        th {
+            font-family: Arial, Helvetica, sans-serif;
+            font-size: 11px;
+            color: #FFFFFF;
+        }
+
+        body {
+            background-color: #263238;
+            margin-left: 0px;
+            margin-top: 0px;
+            margin-right: 0px;
+            margin-bottom: 0px;
+        }
+    </style>
+    <link href="master.css" rel="stylesheet" type="text/css">
+    <script language="javascript">
+        var crome = window.external;
+        var rom = crome.rom;
+    </script>
+    <script language="javascript" src="P13Helper.js"></script>
+    <script language="javascript" src="P13Addresses.js"></script>
+    <script language="javascript" src="OptionsPage.js"></script>
+    <script language="javascript" src="Boost.js"></script>
+    <script language="javascript" src="P13Datalogger.js"></script>
+    <script language="javascript" src="ECUFeatures.js"></script>
+
+    <script type="text/javascript">document.title = "P13 Options v" + document.getElementById("P13_HTML_VERSION").getAttribute("data-version") + " -- OptionsPage.js: v" + P13_OPTIONS_VERSION</script>
+</head>
+
+<body scroll="auto" onLoad="loadDefaults()">
+    <form action="" method="post" name="Optionfrm" id="Optionfrm">
+        <table width="100%" border="0" style="margin:10px auto;">
+            <tr>
+                <td width="60%" height="390">
+                    <!--Rev Limits-->
+                    <table>
+                        <tr>
+                            <td width="125">
+                                <font size="1">High Cam Rev Limiter:</font>
+                            </td>
+                            <td>
+                                <input name="txtHiRevCut" type="text" class="formObjects" id="txtHiRevCut" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <font size="1">High Cam Rev Resume:</font>
+                            </td>
+                            <td>
+                                <input name="txtHiRevRes" type="text" class="formObjects" id="txtHiRevRes" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <font size="1">High Cam Rev Limit II:</font>
+                            </td>
+                            <td>
+                                <input name="txtUnknwnRevCut" type="text" class="formObjects" id="txt??RevCut" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <font size="1">High Cam Rev Resume II:</font>
+                            </td>
+                            <td>
+                                <input name="txtUnknwnRevRes" type="text" class="formObjects" id="txt??RevRes" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <font size="1">Low Cam Rev Limit:</font>
+                            </td>
+                            <td>
+                                <input name="txtLoRevCut" type="text" class="formObjects" id="txtLoRevCut" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <font size="1">Low Cam Rev Resume:</font>
+                            </td>
+                            <td>
+                                <input name="txtLoRevRes" type="text" class="formObjects" id="txtLoRevRes" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                    </table>
+                    <br>
+                    <!-- Target Idle Area-->
+                    <table>
+                        <!--Target Idle 1-->
+                        <tr>
+                            <td width="60">
+                                <font size="1">Target Idle:</font>
+                            </td>
+                            <td>
+                                <input name="txtTargetIdle1" type="text" class="formObjects" id="txtTargetIdle1"
+                                    size="5" maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm
+                                </font>
+                            </td>
+                            <td>
+                                <input name="btnStartUp1" type="button" class="formObjects" id="btnStartUp1"
+                                    value="Start-Up Idle Map I " onClick="StartIdle1()">
+                            </td>
+                        </tr>
+                        <!--Target Idle 2-->
+                        <tr>
+                            <td width="60">
+                                <font size="1">Target Idle:</font>
+                            </td>
+                            <td>
+                                <input name="txtTargetIdle2" type="text" class="formObjects" id="txtTargetIdle2"
+                                    size="5" maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm
+                                </font>
+                            </td>
+                            <td>
+                                <input name="btnStartUp2" type="button" class="formObjects" id="btnStartUp1"
+                                    value="Start-Up Idle Map II" onClick="StartIdle2()">
+                            </td>
+                        </tr>
+                    </table>
+                    <br>
+                    <!--VTEC RPMS-->
+                    <table>
+                        <tr>
+                            <td width="125">
+                                <font size="1">Hi-Load Vtec Engage:</font>
+                            </td>
+                            <td>
+                                <input name="txtHiVtecOn" type="text" class="formObjects" id="txtHiVtecOn" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <font size="1">Hi-Load Vtec Release:</font>
+                            </td>
+                            <td>
+                                <input name="txtHiVtecOff" type="text" class="formObjects" id="txtHiVtecOff" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <font size="1">Lo-Load Vtec Engage:</font>
+                            </td>
+                            <td>
+                                <input name="txtLoVtecOn" type="text" class="formObjects" id="txtLoVtecOn" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <font size="1">Lo-Load Vtec Release:</font>
+                            </td>
+                            <td>
+                                <input name="txtLoVtecOff" type="text" class="formObjects" id="txtLoVtecOff" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                    </table>
+                    <br>
+                    <!--IAB / Speed Limit / Multiplier -->
+                    
+                    <table>
+                        <tr>
+                            <td width="60">
+                                <font size="1">IAB on:</font>
+                            </td>
+                            <td>
+                                <input name="txtIABOn" type="text" class="formObjects" id="txtIABOn" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="60">
+                                <font size="1">IAB 0ff:</font>
+                            </td>
+                            <td>
+                                <input name="txtIABOff" type="text" class="formObjects" id="txtIABOff" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                        <td width="60">
+                                <font size="1">ICS on:</font>
+                            </td>
+                            <td>
+                                <input name="txtICSOn" type="text" class="formObjects" id="txtICSOn" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="60">
+                                <font size="1">ICS 0ff:</font>
+                            </td>
+                            <td>
+                                <input name="txtICSOff" type="text" class="formObjects" id="txtICSOff" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <input name="SpdLimitBox" type="checkbox" value="checkbox" onClick="optionSelect(0)">
+                                <font size="1">Speed Limiter:</font>
+                            </td>
+                            <td>
+                                <input name="txtSpdLimit" type="text" class="formObjects" id="txtSpdLimit" size="5"
+                                    maxlength="3" value="" onKeyPress="keyHandler()"
+                                    onchange="handle_speedLimit(true)">&nbsp;<font size="1">Kph</font>
+                            </td>
+                        </tr>
+                        <tr>
+                            <td width="125">
+                                <input name="forceRP7box" type="checkbox" value="checkbox" onClick="optionSelect(31)">
+                                <font size="1">Fuel Multiplier:</font>
+                            </td>
+                            <td>
+                                <input type="text" name="txtRP7Jumper" onKeyPress="keyHandlerWneg(this)"
+                                    class="formObjects" id="txtRP7Jumper" size="5" maxlength="4" value=""
+                                    onchange="constrainThenWriteMultiplier(this)">&nbsp;&nbsp;<font size="1">%</font>
+                            </td>
+                        </tr>
+                    </table>
+                </td>
+                <!-- Checkbox column -->
+                <td width="40%" height="190" align="left" valign="top">
+                    <label title="Bypasses the ROM checksum , and disables the ROM's code execution timer check.">
+                        <input id="ChkSumCheckBox" name="ChkSumCheckBox" type="checkbox" value="checkbox" onClick="optionSelect(13)">
+                        <span class="checkbox-text">Disable Checksum and Runaway code timer</span>
+                    </label>
+                    <br>
+                    <label title ="Allows the ROM to be run on known compatible ECUs without defaulting to limp mode. See RP Jumpers and tbl_6d56">
+                        <input id="P12Compatbox" name="P12Compatbox" type="checkbox" value="checkbox" onClick="optionSelect(20)">
+                        <span class="checkbox-text">Use ROM on P11, P12, P13, P14, P39, P51</span>
+                    </label>
+                    <br>
+                    <input id="EGRBox" name="EGRBox" type="checkbox" value="checkbox" onClick="optionSelect(3)">
+                    <span class="checkbox-text">Disable EGR</span>
+                    <br>
+                    <input id="OxyBox" name="OxyBox" type="checkbox" value="checkbox" onClick="optionSelect(6)">
+                    <span class="checkbox-text">Disable oxygen sensor (open loop)</span>
+                    <br>
+                    <input id="OxyHeatBox" name="OxyHeatBox" type="checkbox" value="checkbox" onClick="optionSelect(7)">
+                    <span class="checkbox-text">Disable oxygen sensor heater</span>
+                    <br>
+                    <input id="SpeedCheckBox" name="SpeedCheckBox" type="checkbox" value="checkbox" onClick="optionSelect(8)">
+                    <span class="checkbox-text">Disable VTEC speed check</span>
+                    <br>
+                    <input id="CoolCheckBox" name="CoolCheckBox" type="checkbox" value="checkbox" onClick="optionSelect(9)">
+                    <span class="checkbox-text">Disable VTEC coolant temp check</span>
+                    <br>
+                    <input id="PressCheckBox" name="PressCheckBox" type="checkbox" value="checkbox" onClick="optionSelect(10)">
+                    <span class="checkbox-text">Disable VTEC pressure check</span>
+                    <br>
+                    <input id="SolCheckBox" name="SolCheckBox" type="checkbox" value="checkbox" onClick="optionSelect(11)">
+                    <span class="checkbox-text">Disable VTEC solenoid check</span>
+                    <br>
+                    <input id="IACVBox" name="IACVBox" type="checkbox" value="checkbox" onClick="optionSelect(14)">
+                    <span class="checkbox-text">Code 14 IACV Bypass</span>
+                    <br>
+                    <input id="VSSCode17box" name="VSSCode17box" type="checkbox" value="checkbox" onClick="optionSelect(16)">
+                    <span class="checkbox-text">Code 17 VSS Bypass</span>
+                    <br>
+                    <input id="VtecCelbox" name="VtecCelbox" type="checkbox" value="checkbox" onClick="optionSelect(24)">
+                    <span class="checkbox-text">Blink CEL during VTEC</span>
+                    <br>
+                    <label title ="Disables the chosen output(s) and activates it as if it was the VTS. These are all (-) when active, and not all ECUs will have control components installed.">
+                        <input id="EnableAltVtec" name="EnableAltVtec" type="checkbox" value="checkbox" onClick="optionSelect(25)">
+                        <span class="checkbox-text">Enable Alternate Vtec Output</span>
+                    </label>
+                    <br>
+                    &emsp;&emsp;<input id="AltVtecIAB" name="AltVtecIAB" type="checkbox" value="checkbox" onClick="optionSelect(26)">
+                    <span class="checkbox-text">Use IAB for VTEC (Q27 A17-)</span>
+                    <br>
+                    &emsp;&emsp;<input id="AltVtecICS" name="AltVtecICS" type="checkbox" value="checkbox" onClick="optionSelect(27)">
+                    <span class="checkbox-text">Use ICS for VTEC (Q28 A19-)</span>
+                    <br>
+                    &emsp;&emsp;<input id="AltVtecA10" name="AltVtecA10" type="checkbox" value="checkbox" onClick="optionSelect(28)">
+                    <span class="checkbox-text">Use A10 for VTEC (Q29 A10-)</span>
+                    <br>
+                    &emsp;&emsp;<input id="AltVtecPurge" name="AltVtecPurge" type="checkbox" value="checkbox" onClick="optionSelect(29)">
+                    <span class="checkbox-text">Use Purge for VTEC (Q30 A20-)</span>
+                    <br>
+                    <input id="IgnitionCut" name="IgnitionCut" type="checkbox" value="checkbox" onClick="optionSelect(30)">
+                    <span class="checkbox-text">Enable Fuel and Ignition rev cut</span>
+                    <br>
+                    <label title = "Doubles the range allowed in each fuel row by removing some ECU restrictions">
+                        <input id="LargerFuelSpan" name="LargerFuelSpan" type="checkbox" value="checkbox" onClick="optionSelect(34)">
+                        <span class="checkbox-text">Force larger fuel table range</span>   
+                    </label>
+                    <br>
+                    <br>
+                    <font size="2"><b><u>Tuning Only Options:</b></u> !! CAUTION !!</font>
+                    <br>
+                    <label title="Stops the ECU from using alternate tables when MAP and TPS are below a threshold for a given RPM. See label_2bca tbl_6911 tbl_5267">
+                        <input id="RestrictECU" name="RestrictECU" type="checkbox" value="checkbox" onClick="optionSelect(32)">
+                        <span class="checkbox-text">Force fuel table for Low Load / Low TPS</span>
+                    </label>
+                    <br>
+                    <label title="Disables most of the automatic corrections made to the fuel table value.">
+                        <input id="ForceTable" name="ForceTable" type="checkbox" value="checkbox" onClick="optionSelect(33)">
+                        <span class="checkbox-text">Disable Fuel Corrections</span>
+                    </label>
+                    <br>
+                </td>
+
+            </tr>
+        </table>
+<!-- Original 2-column table stays as-is -->
+
+<!-- Buttons in new single-row table below -->
+<table border="0" align="center" style="margin:10px auto;">
+  <tr>
+    <td>
+      <table border="0">
+        <tr>
+          <td><input name="btnFuelXpliers" type="button" style="width:180px" class="formObjects"
+                     value="Main Fuel Base" onClick="StartFuelXplierPage()"></td>
+          <td><input name="btnTableEditor" type="button" style="width:180px" class="formObjects"
+                     value="Advance Table Editor" onClick="StartTableEditorPage()"></td>
+          <td><input name="btnAddBoost" type="button" style="width:180px" class="formObjects"
+                     value="Add Boost Columns" onClick="P13BoostHandler()"></td>
+        </tr>
+        <tr>
+          <td><input name="btnSetCustomMap" type="button" style="width:180px" class="formObjects"
+                     value="Set Custom MAP" onClick="StartCustomMapPage()"></td>
+          <td><input name="btnAddDatalogger" type="button" style="width:180px" class="formObjects"
+                     value="Add Datalogger" onClick="__P13DataloggerMain(address.DATALOGGER_LOC)"></td>
+          <td><input name="btnECUFeatures" type="button" style="width:180px" class="formObjects"
+                     value="ECU Features" onClick="StartECUfeaturesPage()"></td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>
+
+
+
+        <!-- Apply / Cancel buttons-->
+        <table width="100%" border="0" valign="top">
+            <tr>
+                <td height="35" align="right"><input name="btnCancel" type="button" class="formObjects" id="btnCancel"
+                        onClick="window.close()" value="Cancel">&nbsp;<input name="btnApply" type="button"
+                        class="formObjects" id="btnApply" value="  Apply  " onClick="Apply()">&nbsp;&nbsp;</td>
+            </tr>
+        </table>
+    </form>
+</body>
+
+</html>

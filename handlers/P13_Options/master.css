@@ -1,0 +1,60 @@
+.pageTitle {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 24px;
+	font-style: italic;
+	font-weight: 900;
+}
+
+.uLine {
+	border-bottom-width: 3px;
+	border-bottom-style: double;
+	border-bottom-color: #FFFFFF;
+}
+
+.tLine {
+	border-top-width: 1px;
+	border-top-style: solid;
+	border-top-color: #FFFFFF;
+}
+
+.formObjects {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-weight: bold;
+	color: #FFFFFF;
+	border: 1px solid #FFFFFF;
+	background-color: #000000;
+	margin: 0px;
+}
+
+.errorMsg {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 11px;
+	font-weight: bold;
+	color: #FF0000;
+}
+
+.default {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 12px;
+	font-weight: bold;
+	color: #FFFFFF;
+}
+
+.noPadding td {
+	margin: 0px;
+	padding: 0px;
+	border-spacing: 0px;
+}
+
+/* === New: auto-gray disabled checkbox text === */
+.formObjects input[type="checkbox"]:disabled + .checkbox-text,
+.default input[type="checkbox"]:disabled + .checkbox-text {
+	color: gray !important;
+}
+
+/* Optional: support label-wrapped checkboxes */
+.formObjects label input:disabled + .checkbox-text,
+.default label input:disabled + .checkbox-text {
+	color: gray !important;
+}

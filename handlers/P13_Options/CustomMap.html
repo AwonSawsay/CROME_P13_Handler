@@ -1,0 +1,120 @@
+<!--
+*********************************************************************
+P13 Custom MAP Sensor Page for CROME
+Auth: Awon (BiggieSmallBlock on pgmfi)
+*********************************************************************
+Add custom MAP sensor and change Code 3 DTC thresholds
+
+Changelog:
+    -v1.0   - Initial working release - March 2026
+********************************************************************
+-->
+<html>
+<head>
+<title>Custom Map Sensor</title>
+<meta id="CUSTOM_MAP_HTML_VERSION" data-version="1.0">
+<meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+<style type="text/css">
+<!--
+body, td, th {
+	font-family: Arial, Helvetica, sans-serif;
+	font-size: 11px;
+	color: #FFFFFF;
+}
+body {
+	background-color: #000000;
+	margin-left: 0px;
+	margin-top: 0px;
+	margin-right: 0px;
+	margin-bottom: 0px;
+}
+-->
+</style>
+<link href="master.css" rel="stylesheet" type="text/css">
+    <script language="javascript">
+        var crome = window.external;
+        var rom = crome.rom;
+    </script>
+<script language="javascript" src="P13Addresses.js"></script>
+<script language="javascript" src="P13Helper.js"></script>
+<script language="javascript" src="Boost.js"></script>
+<script language="javascript">
+<!--
+// **********************************************************
+
+function loadDefaults () {
+
+    CustMapFrm.txt0VmBar.value = "";
+  	CustMapFrm.txt5VmBar.value = "";
+    CustMapFrm.txtDtcMaxMbar.value = "";
+}
+// **********************************************************
+//RPMfrm.txtTest.onKeyPress = keyHandler;
+//
+//
+function keyHandler() {
+    var key = window.event.keyCode;
+    // allow digits 0–9 (48–57) and minus (45)
+    if ((key < 48 || key > 57) && key != 45) {
+        window.event.keyCode = 0; // block other keys
+    }
+}
+
+// **********************************************************
+// **********************************************************
+// Apply chnges to rom..
+//
+function Apply() {
+    window.external.rom.gup();                          // begin group undo
+    var mbar0 = parseInt(CustMapFrm.txt0VmBar.value);
+    var mbar5 = parseInt(CustMapFrm.txt5VmBar.value);
+    var mbarMinDTC = parseInt(CustMapFrm.txtDtcMinMbar.value);
+    var mbarMaxDTC = parseInt(CustMapFrm.txtDtcMaxMbar.value);
+    __setCustomMapSensor(mbar0, mbar5, mbarMinDTC, mbarMaxDTC)
+    window.external.rom.gup();                          // end group undo
+    window.close();
+}
+
+//-->
+</script>
+</head>
+<body scroll="no" onLoad="loadDefaults()">
+<form action="" method="post" name="CustMapFrm" id="CustMapFrm">
+<table width="100%" border="0" style="table-layout:fixed;">
+    <tr width="100%">
+        <td align="middle"><font size="1">mBar at 0V</font></td>
+        <td align="middle"><font size="1">mBar at 5V</font></td>
+        <td align="middle"><font size="1">Code 3 mBar Min</font></td>
+        <td align="middle"><font size="1">Code 3 mBar Max</font></td>
+    </tr>
+    <tr width="100%">
+        <td align="middle"><input name="txt0VmBar" type="text" class="formObjects" id="txt0VmBar" size="5" maxlength="4" value="" onKeyPress="keyHandler()"></td>
+        <td align="middle"><input name="txt5VmBar" type="text" class="formObjects" id="txt5VmBar" size="5" maxlength="4" value="" onKeyPress="keyHandler()"></td>
+        <td align="middle"><input name="txtDtcMinMbar" type="text" class="formObjects" id="txtDtcMinMbar" size="5" maxlength="4" value="" onKeyPress="keyHandler()"></td>
+        <td align="middle"><input name="txtDtcMaxMbar" type="text" class="formObjects" id="txtDtcMaxMbar" size="5" maxlength="4" value="" onKeyPress="keyHandler()"></td>
+    </tr>
+</table>
+<table width="100%" border="0">
+    <tr>
+        <td height="35" align="middle">
+            <input name="btnCancel" type="button" class="formObjects" id="btnCancel" onClick="window.close()" value="Cancel">&nbsp;
+            <input name="btnApply" type="button" class="formObjects" id="btnApply" value="  Apply  " onClick="Apply()">&nbsp;&nbsp;
+        </td>
+    
+    <tr></tr><td id="versionCell" align ="right">v</td>
+    </tr>
+</table>
+</form>
+</body>
+</html>
+<script>
+var meta = document.getElementById("CUSTOM_MAP_HTML_VERSION");
+var version = meta.getAttribute("data-version");
+
+var versionText = document.createTextNode(version);
+
+var cell = document.getElementById("versionCell");
+cell.appendChild(versionText);
+</script>
+
+

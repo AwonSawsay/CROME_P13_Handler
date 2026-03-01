@@ -1,0 +1,238 @@
+<!--
+*********************************************************************
+P13 ECU Features Page for CROME
+Auth: Awon (BiggieSmallBlock on pgmfi)
+*********************************************************************
+Interface to code that edits the ADC results of all the RP jumpers on 
+on the board allowing the user to toggle board features such as
+VTEC, KNOCK , ELD, BARO, AUTO/5SPD and various other ECU 
+Specific adjustments.
+
+Changelog:
+    -v1.0   - Initial working release - March 2026
+********************************************************************
+-->
+<html>
+<head>
+    <title>ECU Hardware</title>
+
+    <meta id="ECU_HTML_VERSION" data-version="1.0">
+    <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
+
+    <style type="text/css">
+body, td {
+    font-family: Arial, Helvetica, sans-serif;
+    font-size: 11px;
+    color: #FFFFFF;
+}
+body {
+    background-color: #263238;
+    margin: 0;
+}
+table {
+    width: 100%;
+    border-collapse: collapse;
+    table-layout: fixed;
+}
+td {
+    padding: 3px;
+    text-align: left;
+}
+.header {
+    font-weight: bold;
+    padding: 6px 0;
+    border-bottom: 1px solid #444444;
+}
+.label {
+    text-align: left;
+    width: 140px;
+}
+.formObjects {
+    font-size: 11px;
+}
+.disabled {
+    color: #666666;
+}
+.disabled span {
+    font-style: italic;
+}
+.version {
+    text-align: right;
+    font-size: 10px;
+    color: #888888;
+}
+span.radioText {
+    margin-left: 3px;
+}
+    </style>
+    <link href="master.css" rel="stylesheet" type="text/css">
+    <script language="javascript">
+        var crome = window.external;
+        var rom = crome.rom;
+    </script>
+    <script language="javascript" src="P13Addresses.js"></script>
+    <script language="javascript" src="P13Helper.js"></script>
+    <script language="javascript" src="ECUFeatures.js"></script>
+</head>
+
+<body scroll="auto" onLoad="onLoadFeaturesInit()">
+<form>
+<table>
+<tr>
+    <td colspan="4" class="header" align="center">
+       <center>ECU RP Jumper Control <span id="versionCell"></span></center> 
+    </td>
+</tr>
+
+<tr>
+    <td class="label">Mode:</td>
+    <td><input type="radio" name="topMode" value="p13" onClick="applyTopMode()"> US P13 Defaults</td>
+    <td><input type="radio" name="topMode" value="custom" onClick="applyTopMode()"> Custom</td>
+    <td><input type="radio" name="topMode" value="ecu" onClick="applyTopMode()"> ECU Select</td>
+</tr>
+
+<tr><td colspan="4" class="header"></td></tr>
+<tr><td colspan="4">&nbsp;</td></tr>
+
+<!-- FEATURE BLOCK -->
+<tbody id="featureBlock">
+<tr title="Automatic Transmission">
+    <td class="label">Auto Trans</td>
+    <td><input type="radio" id="auto_trans_on" name="auto_trans" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="auto_trans_off" name="auto_trans" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="auto_trans" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="VTEC (Be sure to disable VTP and VTS if using VTEC on a non-VTEC ECU with Alt Outputs)">
+    <td class="label">VTEC</td>
+    <td><input type="radio" id="vtec_on" name="vtec" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="vtec_off" name="vtec" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="vtec" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr id="knockRow"title="Knock Sensor">
+    <td class="label">Knock</td>
+    <td><input type="radio" id="knock_on" name="knock" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="knock_off" name="knock" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="knock" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="ELD (Electronic Load Detector)">
+    <td class="label">ELD</td>
+    <td><input type="radio" id="eld_on" name="eld" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="eld_off" name="eld" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="eld" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="ECU's Built in Barometric Sensor">
+    <td class="label">Baro</td>
+    <td><input type="radio" id="baro_on" name="baro" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="baro_off" name="baro" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="baro" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="TCS (Possibly Traction Control , Don't use on non TCS ROM)">
+    <td class="label">TCS</td>
+    <td><input type="radio" id="tcs_on" name="tcs" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="tcs_off" name="tcs" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="tcs" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="VSS (Possibly enables speed cut and other fuel realted options)">
+    <td class="label">VSS Cut?</td>
+    <td><input type="radio" id="vss_cut_on" name="vss_cut" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="vss_cut_off" name="vss_cut" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="vss_cut" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="Injector Test">
+    <td class="label">Injector Test</td>
+    <td><input type="radio" id="injector_test_on" name="injector_test" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="injector_test_off" name="injector_test" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="injector_test" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="A/T Idle Comp (Possibly an Idle related compensation used for some automatiic transmissions)">
+    <td class="label">A/T Idle Comp</td>
+    <td><input type="radio" id="at_idle_comp_on" name="at_idle_comp" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="at_idle_comp_off" name="at_idle_comp" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="at_idle_comp" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="ELD Option (Unknown option related to ELD)">
+    <td class="label">ELD Option</td>
+    <td><input type="radio" id="eld_option_on" name="eld_option" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="eld_option_off" name="eld_option" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="eld_option" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="Related to min fuel table value and other fuel / ign options">
+    <td class="label">Min Fuel Adj</td>
+    <td><input type="radio" id="min_fuel_adj_on" name="min_fuel_adj" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="min_fuel_adj_off" name="min_fuel_adj" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="min_fuel_adj" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="Close Loop related option ">
+    <td class="label">Close Loop Adj</td>
+    <td><input type="radio" id="closed_loop_adj_on" name="closed_loop_adj" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="closed_loop_adj_off" name="closed_loop_adj" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="closed_loop_adj" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="Unused (Appears to be unused in the US P13 ROM)">
+    <td class="label">Unused</td>
+    <td><input type="radio" id="unused_on" name="unused" value="on"><span class="radioText">On</span></td>
+    <td><input type="radio" id="unused_off" name="unused" value="off"><span class="radioText">Off</span></td>
+    <td><input type="radio" name="unused" value="ecu"><span class="radioText">ECU Select</span></td>
+</tr>
+
+<tr><td colspan="4" class="header"></td></tr>
+<tr><td colspan="4">&nbsp;</td></tr>
+
+<!-- ADJUSTMENT BLOCK -->
+<tbody id="adjustBlock">
+<tr title="RP1 and RP2 jumpers create a pair of table indexes for tbl_5413 based on their value
+One index for under 5k RPM fuel trim , and 1 for over 5K RPM fuel trim
+tbl_5413 is 2 tables in 1. The first 6 words are 5 High rpm trim values followed by a placeholder word
+Then 5 words for low RPM trim values and another placeholder">
+    <td class="label">RP 1/2 Hi Rev Fuel Trim</td>
+    <td><input type="radio" id="rp12_fuel_default" name="rp12_fuel" value="default" onClick="adjustmentRadioClick('rp12_fuel')"><span class="radioText">Default</span></td>
+    <td><input type="radio" name="rp12_fuel" value="custom" onClick="adjustmentRadioClick('rp12_fuel')"><input type="text" id="rp12_fuel_value" size="3" maxlength="3" onKeyPress="numeric255()" onBlur="clamp255(this)"></td>
+    <td><input type="radio" name="rp12_fuel" value="ecu" onClick="adjustmentRadioClick('rp12_fuel')"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="Ignition adjustment , 3 Steps based on RPM , Inverted by the state of J7">
+    <td class="label">RP 3/4 Ign Adj</td>
+    <td><input type="radio" id="rp34_ign_default" name="rp34_ign" value="default" onClick="adjustmentRadioClick('rp34_ign')"><span class="radioText">Default</span></td>
+    <td><input type="radio" name="rp34_ign" value="custom" onClick="adjustmentRadioClick('rp34_ign')"><input type="text" id="rp34_ign_value" size="3" maxlength="3" onKeyPress="numeric255()" onBlur="clamp255(this)"></td>
+    <td><input type="radio" name="rp34_ign" value="ecu" onClick="adjustmentRadioClick('rp34_ign')"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="Raw fuel addon">
+    <td class="label">RP 7/8 Fuel Addon</td>
+    <td><input type="radio" id="rp78_fuel_default" name="rp78_fuel" value="default" onClick="adjustmentRadioClick('rp78_fuel')"><span class="radioText">Default</span></td>
+    <td><input type="radio" name="rp78_fuel" value="custom" onClick="adjustmentRadioClick('rp78_fuel')"><input type="text" id="rp78_fuel_value" size="3" maxlength="3" onKeyPress="numeric255()" onBlur="clamp255(this)"></td>
+    <td><input type="radio" name="rp78_fuel" value="ecu" onClick="adjustmentRadioClick('rp78_fuel')"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="EGR Modifier, see tbl_6a46">
+    <td class="label">RP 9/10 EGR Adj</td>
+    <td><input type="radio" id="rp910_egr_default" name="rp910_egr" value="default" onClick="adjustmentRadioClick('rp910_egr')"><span class="radioText">Default</span></td>
+    <td><input type="radio" name="rp910_egr" value="custom" onClick="adjustmentRadioClick('rp910_egr')"><input type="text" id="rp910_egr_value" size="3" maxlength="3" onKeyPress="numeric255()" onBlur="clamp255(this)"></td>
+    <td><input type="radio" name="rp910_egr" value="ecu" onClick="adjustmentRadioClick('rp910_egr')"><span class="radioText">ECU Select</span></td>
+</tr>
+<tr title="RP 13/14 Close Loop related adjustment,see tbl_542b and tbl_5443. In stock ROM any value > 240 will = 118 ">
+    <td class="label">RP 13/14 Close Loop Adj</td>
+    <td><input type="radio" id="rp1314_cl_default" name="rp1314_cl" value="default" onClick="adjustmentRadioClick('rp1314_cl')"><span class="radioText">Default</span></td>
+    <td><input type="radio" name="rp1314_cl" value="custom" onClick="adjustmentRadioClick('rp1314_cl')"><input type="text" id="rp1314_cl_value" size="3" maxlength="3" onKeyPress="numeric255()" onBlur="clamp255(this)"></td>
+    <td><input type="radio" name="rp1314_cl" value="ecu" onClick="adjustmentRadioClick('rp1314_cl')"><span class="radioText">ECU Select</span></td>
+</tr>
+</tbody>
+
+<tr>
+    <td colspan="4" height="40">
+        <center>
+            <input type="button" style="width: 100;" class="formObjects" value="Help" onClick="showHelp()">
+            &nbsp;
+            <input type="button" style="width: 100;" class="formObjects" value="OK" onClick="onOK()">
+        </center>
+    </td>
+</tr>
+</table>
+</form>
+<script>
+var row = document.getElementById("knockRow");
+
+row.title =
+    (rom.byteAt(address.TABLES_USING_STANDARD_SIZE) !== 0x00)
+    ? "Knock Sensor"
+    : "Knock Sensor - This is permanently disabled when using boost columns.";
+</script>
+</body>
+</html>
