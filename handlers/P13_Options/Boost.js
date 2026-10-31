@@ -448,7 +448,16 @@ function __addCustomMapSensorToROM(){
  * and setting Code 3
 */
 function __setCustomMapSensor(mbar0V, mbar5V, mbarMIN, mbarMAX){
-	
+
+    // Validate before the first write: the hook must never point at a half-configured handler
+    var values = [mbar0V, mbar5V, mbarMIN, mbarMAX];
+    for (var v = 0; v < values.length; v++) {
+        if (typeof values[v] !== 'number' || isNaN(values[v]) || values[v] < -0x8000 || values[v] > 0x7FFF) {
+            throw new Error("Custom MAP sensor value out of range: " + values[v]);
+        }
+    }
+    if (mbar5V <= mbar0V) throw new Error("Custom MAP sensor: mBar at 5V must be greater than mBar at 0V.");
+
     // Install custom MAP code if not already done
     if(rom.byteAt(mapSensor.USING_STOCK_MAP_SENSOR_LOC) !== 0x00 ){
         __addCustomMapSensorToROM();
