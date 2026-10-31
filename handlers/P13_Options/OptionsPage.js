@@ -1357,12 +1357,13 @@ function handle_largerFuelRange(toROM){
             rom.byteAt(LARGER_FUEL_RANGE_UPPER_BOUNDARY_LOC) = LARGER_FUEL_RANGE_UPPER_BOUNDARY_PATCHED;
             rom.byteAt(usingStockFuelLoc) = 0x00;
 
-            // Divide table values by 2
+            // Divide table values by 2. The stock ECU halves each value after lookup (SRLB A),
+            // so a stock cell 2k+1 was used as k. Floor keeps the fuel the ECU was using.
             var r, c;
             for (r = 0; r < lowFuelTable.length; r++) {
                 for (c = 0; c < lowFuelTable[r].length; c++) {
-                    lowFuelTable[r][c] = Math.floor((lowFuelTable[r][c] + 1) / 2);
-                    hiFuelTable[r][c] = Math.floor((hiFuelTable[r][c] + 1) / 2);
+                    lowFuelTable[r][c] = Math.floor(lowFuelTable[r][c] / 2);
+                    hiFuelTable[r][c] = Math.floor(hiFuelTable[r][c] / 2);
                 }
             }
 
