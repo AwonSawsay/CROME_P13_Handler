@@ -217,7 +217,10 @@ function __P13SetTableValue(mapType, col, row, value) {
     if(table.isFuel) {
         // Convert displayed fuel value to byte value
         byteValue = __P13convertFuelTbl(mapType, col, row, value, true);
-        
+
+        // Zero fuel base: the cell has no effect, leave it unchanged
+        if (byteValue === null) return;
+
         // Adjust boundaries if this is a max load or boost column on boosted ROM(custom ROM code required)
         if(__P13GetMapScalarInOffset(mapType, col) === 0xFF && rom.byteAt(address.TABLES_USING_STANDARD_SIZE) === 0x00){
             lowerBounds = address.MIN_BOOSTED_FUEL_BYTE_VALUE;
@@ -447,6 +450,9 @@ function __P13convertFuelRaw(Xplier, Addon, tableValue, MAPScalar, toByte ) {
     
     // Convert displayed fuel value to byte value
     if(toByte){
+        // A fuel base of 0 gives 0 fuel whatever the trim, so there is no byte to compute.
+        // Return null and the caller keeps the current byte.
+        if (fuelBaseWithCustomXplier <= 0) return null;
         calculatedValue = Math.round(((tableValue / FUEL_DISPLAY_REDUCTION) << shiftBase) / fuelBaseWithCustomXplier);
         value = Math.max(0, Math.min(255, Math.floor(calculatedValue)));
     }
