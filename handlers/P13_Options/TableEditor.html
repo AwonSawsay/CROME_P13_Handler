@@ -54,6 +54,14 @@ Changelog:
         //**********************************************************
 
         function loadDefaults() {
+            //Clamp each table cell when focus leaves it
+            var allInputs = document.getElementsByTagName("input");
+            for (var i = 0; i < allInputs.length; i++) {
+                var id = String(allInputs[i].id);
+                if (allInputs[i].type == "text" && (id.indexOf("Top") !== -1 || id.indexOf("Bot") !== -1)) {
+                    allInputs[i].onchange = function () { clampCellText(this); };
+                }
+            }
         }
 
         function keyHandler() {
@@ -341,9 +349,12 @@ Changelog:
 
 
             if (toRom) {
-                topTable = readTextBoxesIntoArray(true);
-                botTable = readTextBoxesIntoArray(false);
-
+                //Untouched cells keep their ROM value; edited cells are converted and clamped to their width
+                topTable = cellsToRaw(readTextBoxesIntoArray(true), topWord, topType);
+                if (isError) return;
+                botTable = cellsToRaw(readTextBoxesIntoArray(false), botWord, botType);
+                if (isError) return;
+                return combineArraysIntoByteArray(tableType, topTable, botTable);
             }
             else {
                 for (var i = 0; i < table.length; i++) {
@@ -373,11 +384,6 @@ Changelog:
                 botTable[i] = convertData(botTable[i], botWord, botType, toRom);
             }
 
-            //Combine top and bottom converted arrays
-
-            if (toRom) {
-                return combineArraysIntoByteArray(tableType, topTable, botTable);
-            }
             topIndex = 0;
             botIndex = 0;
             for (var i = 0; i < table.length; i++) {
@@ -519,6 +525,8 @@ Changelog:
                     var base = 512;
                     if (!toRaw) data += base;
                     converted = _convertTrim(data, true, toRaw, base);
+                    //Only the low byte is stored: 0x200 + byte
+                    if (toRaw) converted -= base;
                     break;
 
                     
@@ -634,6 +642,7 @@ Changelog:
                 //Fill top row boxes
                 if (boolTopRow) {
                     topRow[topIndex].value = dataTable[i];
+                    rememberCell(topRow[topIndex], rawTableAry[i]);
                     topRow[topIndex].disabled = false;
                     topIndex++;
 
@@ -651,6 +660,7 @@ Changelog:
                 }
                 //Fill bottom row boxes
                 botRow[botIndex].value = dataTable[i];
+                rememberCell(botRow[botIndex], rawTableAry[i]);
                 botRow[botIndex].disabled = false;
                 botIndex++;
 
@@ -823,7 +833,75 @@ Changelog:
             return combined;
         }
 
-        //Reads the top row and bottom row text box data into seperate arrays
+        //Remember a cell's ROM value and the text it showed, so Apply can leave untouched cells alone
+        function rememberCell(box, raw) {
+            box.loadedRaw = raw;
+            box.loadedText = String(box.value);
+        }
+
+        //Word / row type used by a top or bottom row cell, as processTableData uses them
+        function cellFormat(isTop) {
+            var topWord = (tableType == 1 || tableType == 4);
+            var botWord = !(tableType == 0 || tableType == 2 || tableType == 5);
+            //Single row data continues from the top row into the bottom row
+            if (tableType == 0 || tableType == 1) return { word: topWord, type: topRowType };
+            if (isTop) return { word: topWord, type: topRowType };
+            return { word: botWord, type: botRowType };
+        }
+
+        //Round and clamp a raw cell value to its storage width (byte 0..255, word 0..65535)
+        function clampCell(value, word, fallback) {
+            value = Number(value);
+            if (isNaN(value)) return fallback;
+            value = Math.round(value);
+            return Math.max(0, Math.min(word ? 0xffff : 0xff, value));
+        }
+
+        //True if the text is not a number (blank included)
+        function isNotNumber(text) {
+            text = String(text).replace(/^\s+|\s+$/g, '');
+            return text === '' || isNaN(Number(text));
+        }
+
+        //Convert typed cell text to a clamped raw value. Text that is not a number keeps the ROM value
+        function cellTextToRaw(text, word, type, fallback) {
+            if (isNotNumber(text)) return fallback;
+            return clampCell(convertData(Number(text), word, type, true), word, fallback);
+        }
+
+        //Raw values for a row of cells: untouched cells keep their ROM value
+        function cellsToRaw(boxes, word, type) {
+            var raw = [];
+            for (var i = 0; i < boxes.length; i++) {
+                if (String(boxes[i].value) == boxes[i].loadedText) {
+                    raw[i] = boxes[i].loadedRaw;
+                    continue;
+                }
+                raw[i] = cellTextToRaw(boxes[i].value, word, type, boxes[i].loadedRaw);
+                if (isError) return raw;
+            }
+            return raw;
+        }
+
+        //When focus leaves a cell: text that is not a number restores the loaded text,
+        //and a value clamped to the storage boundary shows the boundary
+        function clampCellText(box) {
+            if (String(box.value) == box.loadedText) return;
+            if (isNotNumber(box.value)) {
+                box.value = box.loadedText;
+                return;
+            }
+            var format = cellFormat(String(box.id).indexOf("Top") !== -1);
+            var wasError = isError;
+            var raw = cellTextToRaw(box.value, format.word, format.type, box.loadedRaw);
+            if (isError && !wasError) {
+                isError = false;
+                return;
+            }
+            if (raw === 0 || raw === (format.word ? 0xffff : 0xff)) box.value = convertData(raw, format.word, format.type, false);
+        }
+
+        //Returns the enabled top row or bottom row text boxes
         function readTextBoxesIntoArray(returnTop) {
             var topIndex = 0;
             var botIndex = 0;
@@ -848,18 +926,8 @@ Changelog:
             }
 
 
-            if (returnTop) {
-                for (var i = 0; i < topRowIDs.length; i++) {
-                    valuesFromTopBoxesAry[i] = Number(topRowIDs[i].value);
-                }
-                return valuesFromTopBoxesAry;
-            }
-
-
-            for (var i = 0; i < botRowIDs.length; i++) {
-                valuesFromBotBoxesAry[i] = Number(botRowIDs[i].value);
-            }
-            return valuesFromBotBoxesAry;
+            if (returnTop) return topRowIDs;
+            return botRowIDs;
         }
 
         // Apply chnges to rom..Not implemented
@@ -916,6 +984,11 @@ Changelog:
 
             //Convert 16 bit RPM to word or back
             if (word) {
+                if (toRaw) {
+                    if (data >= 1875000) return 0x0000;      //Displayed for words below 30
+                    if (data <= 29) return 0xffff;           //Displayed for words above 0xFC8E
+                    return Math.min(0xffff, Math.round(1875000 / data));
+                }
                 if (data > 0xfc8e) data = 0xffff;
                 if (data < 30) data = 1;
 				var rpm16 = Math.round((1875000 / data) );
@@ -1066,7 +1139,8 @@ Changelog:
             if (word) return _invalidValue(data, "16 Bit Map conversion not available.");
 
             //Convert Map to 8 Bit byte
-            if (toRaw) return Math.min(0xff, Math.round((((data + 45) / 367) * 51) - 24 ) * 2);
+            //Round after doubling, so odd bytes (one count is about 3.6 mBar) store exactly as displayed
+            if (toRaw) return Math.min(0xff, Math.round(((((data + 45) / 367) * 51) - 24) * 2));
 
             //Convert byte to MAP
             if (data > 0xff) return _invalidValue(data, "8 Bit MAP conversion byte overflow");
