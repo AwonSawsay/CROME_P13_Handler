@@ -210,6 +210,7 @@ function __updateMapScalars(){
         // Populate boost columns with default values
         for (i = 0; i < MAP_DEFAULT_BOOST_COL_MBAR.length; i++) {
             mbarScalarTable[0][10 + i] = MAP_DEFAULT_BOOST_COL_MBAR[i];
+            stockRawScalars[10 + i] = undefined;    // Boost columns are mBar values, not stock offsets
         }
     }
     else{
