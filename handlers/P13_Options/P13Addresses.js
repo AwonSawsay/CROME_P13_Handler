@@ -11,7 +11,7 @@ Changelog:
     -v1.0   - Initial working release - March 2026
 ********************************************************************/
 var P13_ADDRESSES_VERSION = '1.0';
-var P13_RELEASE_VERSION = "02.00";                  // Version number baked into ROM . Keep format XX.XX only. For 01.35 The rom bytes will be 0x23 , 0x01.
+var P13_RELEASE_VERSION = "02.01";                  // Version number baked into ROM . Keep format XX.XX only. For 01.35 The rom bytes will be 0x23 , 0x01.
 
 /// <reference path="./P13Helper.js" />
 

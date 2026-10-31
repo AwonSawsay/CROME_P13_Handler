@@ -41,13 +41,16 @@ Features:
 
  Changelog:
     -v2.0   - Initial updated release - March 2026
+    -v2.01  - Fixes from HeadlessCrome testing - October 2026
+              Start-up idle maps write their own map, not program code; default patches
+              applied on ROM open; text boxes clamp to their range; see GitHub history
 
 ********************************************************************/
 // Reference for IDE
 /// <reference path="./P13Helper.js" />
 /// <reference path="./P13Addresses.js" />
 
-var P13_HANDLER_VERSION = "2.0";
+var P13_HANDLER_VERSION = "2.01";
 
 // Fuel values
 var MAX_FUEL_BYTE_VALUE = 0xb0;			            // Actual ECU imposed limit on fuel table values - MAX
@@ -80,8 +83,10 @@ function __P13SetRevScalar(mapType, index, value) {
     // Get RPM scalar table address
     var RPMScalarTableLoc = __P13GetRPMScalarTable(mapType);
 
-    // Set RPM scalar value
-    rom.wordAt(RPMScalarTableLoc + index) = 1875000 / value;
+    // Set RPM scalar value, clamped to the word range (0 RPM or less gives the lowest RPM, 0xFFFF).
+    // Fractions are left for CROME to round, as before.
+    var word = (value <= 0) ? 0xFFFF : Math.max(1, Math.min(0xFFFF, 1875000 / value));
+    rom.wordAt(RPMScalarTableLoc + index) = word;
 
 }
 
@@ -134,17 +139,24 @@ function __P13SetMapScalar(mapType, index, value) {
     var mbar5v = rom.addressOf('NFO_MAP_MAX') - 0x8000;
 
     // Get scalar address
-    MAPScalarAddress = __P13GetMAPScalarTableLoc(mapType) + index;
+    var tableLoc = __P13GetMAPScalarTableLoc(mapType);
+    MAPScalarAddress = tableLoc + index;
 
-    // Offset MAP 
+    // Convert mBar to the stored byte: offset MAP, or raw high byte
+    var scalarByte;
     if (rom.byteAt(address.MAP_USING_OFFSET_SCALARS_LOC) == 0xFF) {
-        rom.byteAt(MAPScalarAddress) = P13.map_mBarToOffset(value);
-        return
+        scalarByte = P13.map_mBarToOffset(value);
+    }
+    else {
+        scalarByte = P13.map_mBarToRawHighByte(value, mbar0v, mbar5v);
     }
 
-    // Convert mbar to Raw high byte
-    rom.byteAt(MAPScalarAddress) = P13.map_mBarToRawHighByte(value, mbar0v, mbar5v);
-   
+    // Keep the axis in order: clamp between the neighbouring columns
+    var lower = (index > 0) ? rom.byteAt(tableLoc + index - 1) : 0x00;
+    var upper = (index < P13.getTableSize().width - 1) ? rom.byteAt(tableLoc + index + 1) : 0xFF;
+    if (lower <= upper) scalarByte = Math.max(lower, Math.min(upper, scalarByte));
+
+    rom.byteAt(MAPScalarAddress) = scalarByte;
 }
 
 /**Get address of the MAP scalar table for the given table */
@@ -170,7 +182,9 @@ function __P13GetRPMScalarTable(mapType){
     if(mapType == 1 || mapType == 4){
         RPMScalarTableLoc = rom.addressOf('HIGH_REV_SCALAR');
     }
-    
+
+    // Never fall back to address 0 (reset vector)
+    if (RPMScalarTableLoc === 0) throw new Error("Invalid RPM axis type: " + mapType);
     return RPMScalarTableLoc;
 }
 
@@ -215,7 +229,10 @@ function __P13SetTableValue(mapType, col, row, value) {
     if(table.isFuel) {
         // Convert displayed fuel value to byte value
         byteValue = __P13convertFuelTbl(mapType, col, row, value, true);
-        
+
+        // Zero fuel base: the cell has no effect, leave it unchanged
+        if (byteValue === null) return;
+
         // Adjust boundaries if this is a max load or boost column on boosted ROM(custom ROM code required)
         if(__P13GetMapScalarInOffset(mapType, col) === 0xFF && rom.byteAt(address.TABLES_USING_STANDARD_SIZE) === 0x00){
             lowerBounds = address.MIN_BOOSTED_FUEL_BYTE_VALUE;
@@ -445,6 +462,9 @@ function __P13convertFuelRaw(Xplier, Addon, tableValue, MAPScalar, toByte ) {
     
     // Convert displayed fuel value to byte value
     if(toByte){
+        // A fuel base of 0 gives 0 fuel whatever the trim, so there is no byte to compute.
+        // Return null and the caller keeps the current byte.
+        if (fuelBaseWithCustomXplier <= 0) return null;
         calculatedValue = Math.round(((tableValue / FUEL_DISPLAY_REDUCTION) << shiftBase) / fuelBaseWithCustomXplier);
         value = Math.max(0, Math.min(255, Math.floor(calculatedValue)));
     }
@@ -503,6 +523,9 @@ function __P13EventHooks() {
     events.OnShowOptions = '__P13DoShowOptions';
     address.DefineAddresses();
     notifiedAlready = false;
+
+    // Checksum disable and ECU compatibility are on by default: apply both when neither is present
+    P13.applyDefaultPatchesOnOpen();
 
 }
 include('handlers\\P13_Options\\P13Helper.js');                  // P13 helper functions 

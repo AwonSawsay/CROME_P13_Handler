@@ -6,9 +6,10 @@ This is the supporting code for OptionsPage.html.
 
 Changelog:
     -v2.0   - Initial updated release - March 2026
+    -v2.01  - Default patches move to ROM open; RPM boxes clamp; Apply writes only edits - October 2026
 ********************************************************************/
 
-var P13_OPTIONS_VERSION = '2.0';
+var P13_OPTIONS_VERSION = '2.01';
 
 /// <reference path="./P13Helper.js" />
 /// <reference path="./P13Addresses.js" />
@@ -35,13 +36,11 @@ function loadDefaults() {
     Optionfrm.txtIABOff.value       = P13.rpm_byteToRPM(rom.byteAt(address.IAB_OFF_LOC));
     Optionfrm.txtICSOn.value        = P13.rpm_byteToRPM(rom.byteAt(address.ICS_ON_LOC));
     Optionfrm.txtICSOff.value       = P13.rpm_byteToRPM(rom.byteAt(address.ICS_OFF_LOC));
+    rememberLoadedText();
 
-    // Turn off checksum and enable compat mode by default
-    Optionfrm.ChkSumCheckBox.checked = true;
-    handle_checksumAndRunaway(true);
-    Optionfrm.P12Compatbox.checked = true;
-    handle_ECUCompatibility(true);
-    
+    // Checksum disable and ECU compatibility are applied when the ROM is opened
+    // (P13.applyDefaultPatchesOnOpen), so the page only shows their state.
+
     // Initialize all check boxes
     callHandlers();
 }
@@ -194,25 +193,68 @@ function optionSelect(m) {
 
 }
 
-/** Update ROM with all RPM values from the option check boxes */
+// ************* RPM Text Boxes *****************************
+// Text each RPM box showed when the page loaded. Apply writes only boxes whose text changed, so
+// display rounding never rewrites a value the user did not edit.
+var loadedText = {};
+var WORD_RPM_FIELDS = ['txtHiRevCut', 'txtHiRevRes', 'txtUnknwnRevCut', 'txtUnknwnRevRes',
+                       'txtLoRevCut', 'txtLoRevRes', 'txtTargetIdle1', 'txtTargetIdle2'];
+var BYTE_RPM_FIELDS = ['txtHiVtecOn', 'txtHiVtecOff', 'txtLoVtecOn', 'txtLoVtecOff',
+                       'txtIABOn', 'txtIABOff', 'txtICSOn', 'txtICSOff'];
+var WORD_RPM_MIN = 29;      // Lowest RPM a word holds: 1875000 / 0xFFFF = 28.6
+var BYTE_RPM_MAX = 10054;   // RPM shown for byte 0xFF (P13.rpm_byteToRPM)
+
+/** Remember the text of every RPM box */
+function rememberLoadedText() {
+    var i;
+    for (i = 0; i < WORD_RPM_FIELDS.length; i++) loadedText[WORD_RPM_FIELDS[i]] = String(Optionfrm[WORD_RPM_FIELDS[i]].value);
+    for (i = 0; i < BYTE_RPM_FIELDS.length; i++) loadedText[BYTE_RPM_FIELDS[i]] = String(Optionfrm[BYTE_RPM_FIELDS[i]].value);
+}
+
+/** True if the user changed the box since the page loaded */
+function fieldChanged(name) {
+    return String(Optionfrm[name].value) != loadedText[name];
+}
+
+/** Clamp a word RPM box to the range a word can hold. Blank or invalid text restores the loaded value */
+function clampWordRpmField(field) {
+    var rpm = parseFloat(field.value);
+    if (isNaN(rpm)) { field.value = loadedText[field.name]; return; }
+    if (rpm < WORD_RPM_MIN) field.value = WORD_RPM_MIN;
+}
+
+/** Clamp a byte RPM box to the range a byte can hold. Blank or invalid text restores the loaded value */
+function clampByteRpmField(field) {
+    var rpm = parseFloat(field.value);
+    if (isNaN(rpm)) { field.value = loadedText[field.name]; return; }
+    if (rpm < 0) field.value = 0;
+    if (rpm > BYTE_RPM_MAX) field.value = BYTE_RPM_MAX;
+}
+
+/** Update ROM with the RPM values the user changed */
 function Apply() {
+    var i;
+    // Boxes are clamped when focus leaves them; clamp again in case Apply is reached without that
+    for (i = 0; i < WORD_RPM_FIELDS.length; i++) clampWordRpmField(Optionfrm[WORD_RPM_FIELDS[i]]);
+    for (i = 0; i < BYTE_RPM_FIELDS.length; i++) clampByteRpmField(Optionfrm[BYTE_RPM_FIELDS[i]]);
+
     rom.gup();                              // begin group undo
-    rom.wordAt(address.REV_CUT1_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtHiRevCut.value);
-    rom.wordAt(address.REV_RES1_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtHiRevRes.value);
-    rom.wordAt(address.REV_CUT3_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtUnknwnRevCut.value);
-    rom.wordAt(address.REV_RES3_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtUnknwnRevRes.value);
-    rom.wordAt(address.REV_CUT2_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtLoRevCut.value);
-    rom.wordAt(address.REV_RES2_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtLoRevRes.value);
-    rom.wordAt(address.TARGET_IDLE_1_LOC)   = P13.rpm_RPMToWord(Optionfrm.txtTargetIdle1.value);
-    rom.wordAt(address.TARGET_IDLE_2_LOC)   = P13.rpm_RPMToWord(Optionfrm.txtTargetIdle2.value);
-    rom.byteAt(address.HI_VTEC_ON_LOC)      = P13.rpm_RPMToByte(Optionfrm.txtHiVtecOn.value);
-    rom.byteAt(address.HI_VTEC_OFF_LOC)     = P13.rpm_RPMToByte(Optionfrm.txtHiVtecOff.value);
-    rom.byteAt(address.LO_VTEC_ON_LOC)      = P13.rpm_RPMToByte(Optionfrm.txtLoVtecOn.value);
-    rom.byteAt(address.LO_VTEC_OFF_LOC)     = P13.rpm_RPMToByte(Optionfrm.txtLoVtecOff.value);
-    rom.byteAt(address.IAB_ON_LOC)          = P13.rpm_RPMToByte(Optionfrm.txtIABOn.value);
-    rom.byteAt(address.IAB_OFF_LOC)         = P13.rpm_RPMToByte(Optionfrm.txtIABOff.value);
-    rom.byteAt(address.ICS_ON_LOC)          = P13.rpm_RPMToByte(Optionfrm.txtICSOn.value);
-    rom.byteAt(address.ICS_OFF_LOC)         = P13.rpm_RPMToByte(Optionfrm.txtICSOff.value);    
+    if (fieldChanged('txtHiRevCut'))     rom.wordAt(address.REV_CUT1_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtHiRevCut.value);
+    if (fieldChanged('txtHiRevRes'))     rom.wordAt(address.REV_RES1_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtHiRevRes.value);
+    if (fieldChanged('txtUnknwnRevCut')) rom.wordAt(address.REV_CUT3_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtUnknwnRevCut.value);
+    if (fieldChanged('txtUnknwnRevRes')) rom.wordAt(address.REV_RES3_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtUnknwnRevRes.value);
+    if (fieldChanged('txtLoRevCut'))     rom.wordAt(address.REV_CUT2_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtLoRevCut.value);
+    if (fieldChanged('txtLoRevRes'))     rom.wordAt(address.REV_RES2_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtLoRevRes.value);
+    if (fieldChanged('txtTargetIdle1'))  rom.wordAt(address.TARGET_IDLE_1_LOC)   = P13.rpm_RPMToWord(Optionfrm.txtTargetIdle1.value);
+    if (fieldChanged('txtTargetIdle2'))  rom.wordAt(address.TARGET_IDLE_2_LOC)   = P13.rpm_RPMToWord(Optionfrm.txtTargetIdle2.value);
+    if (fieldChanged('txtHiVtecOn'))     rom.byteAt(address.HI_VTEC_ON_LOC)      = P13.rpm_RPMToByte(Optionfrm.txtHiVtecOn.value);
+    if (fieldChanged('txtHiVtecOff'))    rom.byteAt(address.HI_VTEC_OFF_LOC)     = P13.rpm_RPMToByte(Optionfrm.txtHiVtecOff.value);
+    if (fieldChanged('txtLoVtecOn'))     rom.byteAt(address.LO_VTEC_ON_LOC)      = P13.rpm_RPMToByte(Optionfrm.txtLoVtecOn.value);
+    if (fieldChanged('txtLoVtecOff'))    rom.byteAt(address.LO_VTEC_OFF_LOC)     = P13.rpm_RPMToByte(Optionfrm.txtLoVtecOff.value);
+    if (fieldChanged('txtIABOn'))        rom.byteAt(address.IAB_ON_LOC)          = P13.rpm_RPMToByte(Optionfrm.txtIABOn.value);
+    if (fieldChanged('txtIABOff'))       rom.byteAt(address.IAB_OFF_LOC)         = P13.rpm_RPMToByte(Optionfrm.txtIABOff.value);
+    if (fieldChanged('txtICSOn'))        rom.byteAt(address.ICS_ON_LOC)          = P13.rpm_RPMToByte(Optionfrm.txtICSOn.value);
+    if (fieldChanged('txtICSOff'))       rom.byteAt(address.ICS_OFF_LOC)         = P13.rpm_RPMToByte(Optionfrm.txtICSOff.value);
     setRomVersion();                        // Write version info into ROM
     rom.gup();                              // end group undo
     window.close();
@@ -293,13 +335,12 @@ function _writeMultiplierToROM(xplier) {
     rom.byteAt(address.RP7_FUEL_XPLIER_LSB_LOC) = xplier & 0xff;
 }
 
-/** Constrain Multiplier TextBox value then write to ROM */
+/** Clamp Multiplier TextBox value to -99..400 then write to ROM. Blank or invalid text keeps the ROM value */
 function constrainThenWriteMultiplier(id) {
-    var oldValue = id.value;
-    var newValue = Math.max(-99, Math.min(400, oldValue));
-    id.value = newValue;
-    if (oldValue != newValue) alert("Valid range: -99 to 400");
-    _writeMultiplierToROM(_percentToMultiplier(parseInt(id.value)));
+    var percent = parseInt(id.value, 10);
+    if (isNaN(percent)) percent = Math.round(_multiplierToPercent(P13.getCustomXplierValue()));
+    id.value = Math.max(-99, Math.min(400, percent));
+    _writeMultiplierToROM(_percentToMultiplier(parseInt(id.value, 10)));
     window.external.refresh();
 }
 
@@ -496,7 +537,12 @@ function handle_speedLimit(toROM) {
     if (toROM) {
         if (Optionfrm.SpdLimitBox.checked == true) {
             Optionfrm.txtSpdLimit.disabled = false;
-            rom.byteAt(rom.addressOf('SPEED_LIMIT')) = Math.min(0xFF, Optionfrm.txtSpdLimit.value);
+            // Clamp to a byte. Blank or invalid text keeps the ROM value
+            var limit = parseInt(Optionfrm.txtSpdLimit.value, 10);
+            if (isNaN(limit)) limit = rom.byteAt(rom.addressOf('SPEED_LIMIT'));
+            limit = Math.max(0, Math.min(0xFF, limit));
+            Optionfrm.txtSpdLimit.value = limit;
+            rom.byteAt(rom.addressOf('SPEED_LIMIT')) = limit;
         }
         else {
             Optionfrm.txtSpdLimit.value = 255;
@@ -713,48 +759,14 @@ function handle_debugMode(toROM) {
 }
 
 
-/** Skips over the code that resets the ECU when the code execution takes longer than expected.
-    When features are added to the ROM , this check will cause high RPM resets if left alone */
-function removeRunawayCodeCheck(patchROM) {
-    var RUNAWAY_CODE_PATCH_LOC = 0x3951;
-    var RUNAWAY_CODE_STOCK_CODE = 0xCD; // Conditional Jump over fail code
-    var RUNAWAY_CODE_PATCH_CODE = 0xCB; // Unconditional Jump over fail code
-
-    // Patch ROM
-    if (patchROM) {
-        rom.byteAt(RUNAWAY_CODE_PATCH_LOC) = RUNAWAY_CODE_PATCH_CODE;
-        return;
-    }
-
-    // Revert to Stock
-    rom.byteAt(RUNAWAY_CODE_PATCH_LOC) = RUNAWAY_CODE_STOCK_CODE;
-}
-
-/** remove ROM Checksum and remove runaway code check */
+/** remove ROM Checksum and remove runaway code check (patch bytes in P13Helper.js) */
 function handle_checksumAndRunaway(toROM) {
-    // Forces conditional jumps to both checksum locations 
-    var CHECKSUM1_PATCH_LOC = 0x0d26;
-    var CHECKSUM2_PATCH_LOC = 0x09db;
-    var CHECKSUM_PATCH_CODE = 0xcb;
-    var CHECKSUM_STOCK_CODE = 0xc9
     if (toROM) {
-        if (Optionfrm.ChkSumCheckBox.checked == true) {
-            rom.byteAt(CHECKSUM1_PATCH_LOC) = CHECKSUM_PATCH_CODE;
-            rom.byteAt(CHECKSUM2_PATCH_LOC) = CHECKSUM_PATCH_CODE;
-            removeRunawayCodeCheck(true);
-        }
-        else {
-            rom.byteAt(CHECKSUM1_PATCH_LOC) = CHECKSUM_STOCK_CODE;
-            rom.byteAt(CHECKSUM2_PATCH_LOC) = CHECKSUM_STOCK_CODE;
-            removeRunawayCodeCheck(false);
-        }
+        P13.opt_setChecksumDisabled(Optionfrm.ChkSumCheckBox.checked == true);
         return;
     }
 
-    Optionfrm.ChkSumCheckBox.checked = false;
-    if (rom.byteAt(CHECKSUM1_PATCH_LOC) != CHECKSUM_STOCK_CODE && rom.byteAt(CHECKSUM2_PATCH_LOC) != CHECKSUM_STOCK_CODE) {
-        Optionfrm.ChkSumCheckBox.checked = true;
-    }
+    Optionfrm.ChkSumCheckBox.checked = P13.opt_isChecksumDisabled();
 }
 
 /** IACV error bypass */
@@ -802,48 +814,14 @@ function handle_VSS(toROM) {
     }
 }
 
-/** ECU Compatibilty  */
+/** ECU Compatibilty (patch bytes and notes in P13Helper.js) */
 function handle_ECUCompatibility(toROM) {
-    /* Allows the p13 rom to be run on other ECUS
-    Merges the RP jumper index table with the indexes from other ROMS such as
-    P11, p12, p14, p39 AND P51
-    
-    It's worth noting that the reason you can't move a stock ROM from a 
-    P13 to a P12 (for example) is because the RP jumpers will look up an 
-    invalid value from tbl_6d56, telling the ECU that there is a 
-    ROM / Hardware mismatch and throw a BRK code and stay in a reset 
-    loop (limp mode). The compatibility patch on the Options page actually 
-    just populates this table with known indices in the expected locations, 
-    allowing the ROM to be run on all the known (to me) ECUs that run the 
-    same code base. */
-
-    var RP_JUMPER_INDEX_TABLE_LOC = 0x6d56;
-    var RP_JUMPER_INDEX_USP13_OFFSET = 17;
-    var RP_JUMPER_INDEX_USP13_VALUES = new Array(0x12, 0x13);
-    var RP_JUMPER_INDEX_MERGED_TBL = new Array(
-        0x02, 0x03, 0xFF, 0x06, 0x05,
-        0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-        0x0F, 0xFF, 0xFF, 0xFF, 0x10,
-        0xFF, 0xFF, 0x12, 0x13, 0x01,
-        0x07, 0x08, 0x09, 0xFF, 0x0B
-    );
     if (toROM) {
-        if (Optionfrm.P12Compatbox.checked == true) {
-            P13.rom_write(RP_JUMPER_INDEX_TABLE_LOC, RP_JUMPER_INDEX_MERGED_TBL, RP_JUMPER_INDEX_MERGED_TBL.length);
-
-        }
-        // Restore table to stock US p13
-        else {
-            P13.rom_fill(RP_JUMPER_INDEX_TABLE_LOC, RP_JUMPER_INDEX_TABLE_LOC + RP_JUMPER_INDEX_MERGED_TBL.length - 1, 0xff);
-            P13.rom_write(RP_JUMPER_INDEX_TABLE_LOC + RP_JUMPER_INDEX_USP13_OFFSET, RP_JUMPER_INDEX_USP13_VALUES, RP_JUMPER_INDEX_USP13_VALUES.length);
-        }
+        P13.opt_setECUCompatibility(Optionfrm.P12Compatbox.checked == true);
         return;
     }
 
-    Optionfrm.P12Compatbox.checked = false;
-    if (rom.byteAt(RP_JUMPER_INDEX_TABLE_LOC) != 0xFF) {
-        Optionfrm.P12Compatbox.checked = true;
-    }
+    Optionfrm.P12Compatbox.checked = P13.opt_isECUCompatibilityOn();
 }
 
 // Handle transmission type checkboxes and states
@@ -1357,12 +1335,13 @@ function handle_largerFuelRange(toROM){
             rom.byteAt(LARGER_FUEL_RANGE_UPPER_BOUNDARY_LOC) = LARGER_FUEL_RANGE_UPPER_BOUNDARY_PATCHED;
             rom.byteAt(usingStockFuelLoc) = 0x00;
 
-            // Divide table values by 2
+            // Divide table values by 2. The stock ECU halves each value after lookup (SRLB A),
+            // so a stock cell 2k+1 was used as k. Floor keeps the fuel the ECU was using.
             var r, c;
             for (r = 0; r < lowFuelTable.length; r++) {
                 for (c = 0; c < lowFuelTable[r].length; c++) {
-                    lowFuelTable[r][c] = Math.floor((lowFuelTable[r][c] + 1) / 2);
-                    hiFuelTable[r][c] = Math.floor((hiFuelTable[r][c] + 1) / 2);
+                    lowFuelTable[r][c] = Math.floor(lowFuelTable[r][c] / 2);
+                    hiFuelTable[r][c] = Math.floor(hiFuelTable[r][c] / 2);
                 }
             }
 

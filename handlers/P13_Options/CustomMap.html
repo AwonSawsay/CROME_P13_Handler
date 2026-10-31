@@ -65,14 +65,80 @@ function keyHandler() {
 // Apply chnges to rom..
 //
 function Apply() {
+    // Check every box before anything is written (boxes are also checked when focus leaves them)
+    var fields = ['txt0VmBar', 'txt5VmBar', 'txtDtcMinMbar', 'txtDtcMaxMbar'];
+    var i;
+    for (i = 0; i < fields.length; i++) {
+        if (readMbar(CustMapFrm[fields[i]]) === null) {
+            alert(FIELD_LABELS[fields[i]] + " needs a whole number of mBar.");
+            CustMapFrm[fields[i]].focus();
+            return;
+        }
+    }
+    for (i = 0; i < fields.length; i++) checkMbarField(CustMapFrm[fields[i]]);
+
+    var mbar0 = readMbar(CustMapFrm.txt0VmBar);
+    var mbar5 = readMbar(CustMapFrm.txt5VmBar);
+    var mbarMinDTC = readMbar(CustMapFrm.txtDtcMinMbar);
+    var mbarMaxDTC = readMbar(CustMapFrm.txtDtcMaxMbar);
+    if (mbar5 <= mbar0) {
+        alert("mBar at 5V must be greater than mBar at 0V.");
+        CustMapFrm.txt5VmBar.focus();
+        return;
+    }
+    if (mbarMinDTC >= mbarMaxDTC) {
+        alert("Code 3 mBar Min must be below Code 3 mBar Max.");
+        CustMapFrm.txtDtcMinMbar.focus();
+        return;
+    }
+
     window.external.rom.gup();                          // begin group undo
-    var mbar0 = parseInt(CustMapFrm.txt0VmBar.value);
-    var mbar5 = parseInt(CustMapFrm.txt5VmBar.value);
-    var mbarMinDTC = parseInt(CustMapFrm.txtDtcMinMbar.value);
-    var mbarMaxDTC = parseInt(CustMapFrm.txtDtcMaxMbar.value);
     __setCustomMapSensor(mbar0, mbar5, mbarMinDTC, mbarMaxDTC)
     window.external.rom.gup();                          // end group undo
     window.close();
+}
+
+// **********************************************************
+// Range checks. Values outside the usual range for OE and aftermarket sensors ask the user;
+// answering No clamps to the nearest boundary. Every value must fit the sensor info word (0x8000 + mBar).
+var SENSOR_0V_MIN = -1000, SENSOR_0V_MAX = 1000;     // Stock P13 sensor: -70 mBar at 0V
+var SENSOR_5V_MIN = 1000, SENSOR_5V_MAX = 10000;     // Stock P13 sensor: 1790 mBar at 5V
+var STORAGE_MIN = -32768, STORAGE_MAX = 32767;
+var FIELD_LABELS = { txt0VmBar: "mBar at 0V", txt5VmBar: "mBar at 5V", txtDtcMinMbar: "Code 3 mBar Min", txtDtcMaxMbar: "Code 3 mBar Max" };
+var acceptedText = {};      // Out-of-range values the user chose to keep, so they are asked only once
+
+/** Whole number in a box, or null when blank or not a number */
+function readMbar(field) {
+    var text = String(field.value).replace(/^\s+|\s+$/g, '');
+    if (!/^-?\d+$/.test(text)) return null;
+    return parseInt(text, 10);
+}
+
+/** Usual range for a box. Code 3 limits must lie within the sensor range */
+function usualRange(field) {
+    if (field.name == 'txt0VmBar') return { min: SENSOR_0V_MIN, max: SENSOR_0V_MAX };
+    if (field.name == 'txt5VmBar') return { min: SENSOR_5V_MIN, max: SENSOR_5V_MAX };
+    var mbar0 = readMbar(CustMapFrm.txt0VmBar);
+    var mbar5 = readMbar(CustMapFrm.txt5VmBar);
+    if (mbar0 === null || mbar5 === null || mbar5 <= mbar0) return null;
+    return { min: mbar0, max: mbar5 };
+}
+
+/** Check a box when focus leaves it: ask about unusual values, clamp on No */
+function checkMbarField(field) {
+    var value = readMbar(field);
+    if (value === null) return;
+    value = Math.max(STORAGE_MIN, Math.min(STORAGE_MAX, value));
+    field.value = value;
+    var range = usualRange(field);
+    if (range === null || (value >= range.min && value <= range.max)) return;
+    if (acceptedText[field.name] === String(field.value)) return;
+    if (confirm(FIELD_LABELS[field.name] + " = " + value + " is outside the usual range (" + range.min + " to " + range.max + " mBar).\n\n" +
+                "Use this value anyway?\nNo sets it to the nearest boundary.")) {
+        acceptedText[field.name] = String(field.value);
+        return;
+    }
+    field.value = Math.max(range.min, Math.min(range.max, value));
 }
 
 //-->
@@ -88,10 +154,10 @@ function Apply() {
         <td align="middle"><font size="1">Code 3 mBar Max</font></td>
     </tr>
     <tr width="100%">
-        <td align="middle"><input name="txt0VmBar" type="text" class="formObjects" id="txt0VmBar" size="5" maxlength="4" value="" onKeyPress="keyHandler()"></td>
-        <td align="middle"><input name="txt5VmBar" type="text" class="formObjects" id="txt5VmBar" size="5" maxlength="4" value="" onKeyPress="keyHandler()"></td>
-        <td align="middle"><input name="txtDtcMinMbar" type="text" class="formObjects" id="txtDtcMinMbar" size="5" maxlength="4" value="" onKeyPress="keyHandler()"></td>
-        <td align="middle"><input name="txtDtcMaxMbar" type="text" class="formObjects" id="txtDtcMaxMbar" size="5" maxlength="4" value="" onKeyPress="keyHandler()"></td>
+        <td align="middle"><input name="txt0VmBar" type="text" class="formObjects" id="txt0VmBar" size="5" maxlength="4" value="" onKeyPress="keyHandler()" onchange="checkMbarField(this)"></td>
+        <td align="middle"><input name="txt5VmBar" type="text" class="formObjects" id="txt5VmBar" size="5" maxlength="4" value="" onKeyPress="keyHandler()" onchange="checkMbarField(this)"></td>
+        <td align="middle"><input name="txtDtcMinMbar" type="text" class="formObjects" id="txtDtcMinMbar" size="5" maxlength="4" value="" onKeyPress="keyHandler()" onchange="checkMbarField(this)"></td>
+        <td align="middle"><input name="txtDtcMaxMbar" type="text" class="formObjects" id="txtDtcMaxMbar" size="5" maxlength="4" value="" onKeyPress="keyHandler()" onchange="checkMbarField(this)"></td>
     </tr>
 </table>
 <table width="100%" border="0">

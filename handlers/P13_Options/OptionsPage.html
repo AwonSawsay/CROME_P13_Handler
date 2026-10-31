@@ -9,11 +9,12 @@ currently available on the P13.
 
 Changelog:
     -v2.0   - Initial updated release - March 2026
+    -v2.01  - Fixed element ids; RPM boxes clamp when focus leaves them - October 2026
 ********************************************************************
 -->
 <html>
 <head>
-    <meta id="P13_HTML_VERSION" data-version="2.0">
+    <meta id="P13_HTML_VERSION" data-version="2.01">
     <meta http-equiv="Content-Type" content="text/html; charset=iso-8859-1">
     <title>P13 Options Page </title>
     <style type="text/css">
@@ -61,7 +62,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtHiRevCut" type="text" class="formObjects" id="txtHiRevCut" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampWordRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -70,7 +71,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtHiRevRes" type="text" class="formObjects" id="txtHiRevRes" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampWordRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -78,8 +79,8 @@ Changelog:
                                 <font size="1">High Cam Rev Limit II:</font>
                             </td>
                             <td>
-                                <input name="txtUnknwnRevCut" type="text" class="formObjects" id="txt??RevCut" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                <input name="txtUnknwnRevCut" type="text" class="formObjects" id="txtUnknwnRevCut" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampWordRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -87,8 +88,8 @@ Changelog:
                                 <font size="1">High Cam Rev Resume II:</font>
                             </td>
                             <td>
-                                <input name="txtUnknwnRevRes" type="text" class="formObjects" id="txt??RevRes" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                <input name="txtUnknwnRevRes" type="text" class="formObjects" id="txtUnknwnRevRes" size="5"
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampWordRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -97,7 +98,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtLoRevCut" type="text" class="formObjects" id="txtLoRevCut" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampWordRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -106,7 +107,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtLoRevRes" type="text" class="formObjects" id="txtLoRevRes" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampWordRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                     </table>
@@ -120,7 +121,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtTargetIdle1" type="text" class="formObjects" id="txtTargetIdle1"
-                                    size="5" maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm
+                                    size="5" maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampWordRpmField(this)">&nbsp;<font size="1">rpm
                                 </font>
                             </td>
                             <td>
@@ -135,11 +136,11 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtTargetIdle2" type="text" class="formObjects" id="txtTargetIdle2"
-                                    size="5" maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm
+                                    size="5" maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampWordRpmField(this)">&nbsp;<font size="1">rpm
                                 </font>
                             </td>
                             <td>
-                                <input name="btnStartUp2" type="button" class="formObjects" id="btnStartUp1"
+                                <input name="btnStartUp2" type="button" class="formObjects" id="btnStartUp2"
                                     value="Start-Up Idle Map II" onClick="StartIdle2()">
                             </td>
                         </tr>
@@ -153,7 +154,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtHiVtecOn" type="text" class="formObjects" id="txtHiVtecOn" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampByteRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -162,7 +163,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtHiVtecOff" type="text" class="formObjects" id="txtHiVtecOff" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampByteRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -171,7 +172,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtLoVtecOn" type="text" class="formObjects" id="txtLoVtecOn" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampByteRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -180,7 +181,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtLoVtecOff" type="text" class="formObjects" id="txtLoVtecOff" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampByteRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                     </table>
@@ -194,7 +195,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtIABOn" type="text" class="formObjects" id="txtIABOn" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampByteRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -203,7 +204,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtIABOff" type="text" class="formObjects" id="txtIABOff" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampByteRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -212,7 +213,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtICSOn" type="text" class="formObjects" id="txtICSOn" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampByteRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>
@@ -221,7 +222,7 @@ Changelog:
                             </td>
                             <td>
                                 <input name="txtICSOff" type="text" class="formObjects" id="txtICSOff" size="5"
-                                    maxlength="4" value="" onKeyPress="keyHandler()">&nbsp;<font size="1">rpm</font>
+                                    maxlength="4" value="" onKeyPress="keyHandler()" onchange="clampByteRpmField(this)">&nbsp;<font size="1">rpm</font>
                             </td>
                         </tr>
                         <tr>

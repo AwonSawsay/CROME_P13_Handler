@@ -191,17 +191,26 @@ function __updateMapScalars(){
     var tableSize = P13.getTableSize();
     var mapScalarTable = P13.CreateArrayFromTable(mapScalarTableLoc, tableSize.width, 1);
     var mbarScalarTable = mapScalarTable;
+    var stockRawScalars = [];       // Exact raw bytes for stock-sensor offset columns, first time only
     var i;
 
-  
+
     // First Time? Convert from offset to mBar
     if(firstTimeExpanding){
         for (i = 0; i < tableSize.width && i < mapScalarTable[0].length; i++) {
+            // Stock sensor: convert the offset straight to the raw high byte that
+            // P13.map_rawHighByteToOffset maps back to the same offset (offset 2k <- raw 0x18 + k;
+            // 0xFF <- first byte above 0x97). Going through mBar turned offset 0xFF into raw 0x97 (offset 0xFE).
+            if (rom.byteAt(mapSensor.USING_STOCK_MAP_SENSOR_LOC) == 0xff) {
+                var offset = mapScalarTable[0][i];
+                stockRawScalars[i] = (offset >= 0xFF) ? 0x98 : 0x18 + Math.ceil(offset / 2);
+            }
             mbarScalarTable[0][i] = P13.map_offsetToMbar(mapScalarTable[0][i]);
-        }  
+        }
         // Populate boost columns with default values
         for (i = 0; i < MAP_DEFAULT_BOOST_COL_MBAR.length; i++) {
             mbarScalarTable[0][10 + i] = MAP_DEFAULT_BOOST_COL_MBAR[i];
+            stockRawScalars[10 + i] = undefined;    // Boost columns are mBar values, not stock offsets
         }
     }
     else{
@@ -220,6 +229,7 @@ function __updateMapScalars(){
     // Convert mBar scalars to raw ADC high byte
     for (i = 0; i < mbarScalarTable[0].length; i++) {
         mapScalarTable[0][i] = P13.constrainByte(P13.map_mBarToRawHighByte(mbarScalarTable[0][i], rawMbar0v, rawMbar5v));
+        if (stockRawScalars[i] !== undefined) mapScalarTable[0][i] = stockRawScalars[i];
     }
 
     // Write tables to ROM 
@@ -439,7 +449,16 @@ function __addCustomMapSensorToROM(){
  * and setting Code 3
 */
 function __setCustomMapSensor(mbar0V, mbar5V, mbarMIN, mbarMAX){
-	
+
+    // Validate before the first write: the hook must never point at a half-configured handler
+    var values = [mbar0V, mbar5V, mbarMIN, mbarMAX];
+    for (var v = 0; v < values.length; v++) {
+        if (typeof values[v] !== 'number' || isNaN(values[v]) || values[v] < -0x8000 || values[v] > 0x7FFF) {
+            throw new Error("Custom MAP sensor value out of range: " + values[v]);
+        }
+    }
+    if (mbar5V <= mbar0V) throw new Error("Custom MAP sensor: mBar at 5V must be greater than mBar at 0V.");
+
     // Install custom MAP code if not already done
     if(rom.byteAt(mapSensor.USING_STOCK_MAP_SENSOR_LOC) !== 0x00 ){
         __addCustomMapSensorToROM();
