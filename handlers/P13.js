@@ -170,7 +170,9 @@ function __P13GetRPMScalarTable(mapType){
     if(mapType == 1 || mapType == 4){
         RPMScalarTableLoc = rom.addressOf('HIGH_REV_SCALAR');
     }
-    
+
+    // Never fall back to address 0 (reset vector)
+    if (RPMScalarTableLoc === 0) throw new Error("Invalid RPM axis type: " + mapType);
     return RPMScalarTableLoc;
 }
 
