@@ -111,45 +111,60 @@ Changelog:
             loadAllData();
         }
 
-        //Get multiplier Byte from ROM table, convert if required
-        function byteToMapXplier(address) {
+        //Multiplier text for a byte in the current display mode
+        function xplierByteToText(b) {
             divider = 16;
             if (document.getElementById('chkShowRaw').checked) divider = 1;
 
             //Return raw hex
-            if (document.getElementById('chkShowHex').checked) return "0x" + parseInt(rom.byteAt(address)).toString(16).toUpperCase();
+            if (document.getElementById('chkShowHex').checked) return "0x" + parseInt(b).toString(16).toUpperCase();
 
             //Return dec Raw or Multiplier
-            return Math.round((rom.byteAt(address) / divider) * 100) / 100;
+            return Math.round((b / divider) * 100) / 100;
         }
 
-        //Save user multiplier input to ROM, convert if required
+        //Get multiplier Byte from ROM table, convert if required
+        function byteToMapXplier(address) {
+            return xplierByteToText(rom.byteAt(address));
+        }
+
+        //Save user multiplier input to ROM, convert if required. Returns null for text that is not a number
         function mapXplierToByte(value) {
-            value = parseFloat(value);
+            //Hex display: parseInt(..., 16) reads "0x75" and "75". parseFloat("0x75") is 0
+            var hex = document.getElementById('chkShowHex').checked;
+            value = hex ? parseInt(value, 16) : parseFloat(value);
+            if (isNaN(value)) return null;
             divider = 16;
-            if (document.getElementById('chkShowRaw').checked || document.getElementById('chkShowHex').checked) divider = 1;
+            if (document.getElementById('chkShowRaw').checked || hex) divider = 1;
             return constrain(Math.round(value * divider), 0 , 255);
+        }
+
+        //Addon text for a byte in the current display mode
+        function addonByteToText(b) {
+
+            //Return raw hex
+            if (document.getElementById('chkShowHex').checked) return "0x" + parseInt(b).toString(16).toUpperCase();
+
+            //Show raw decimal
+            if (document.getElementById('chkShowRaw').checked) return b;
+
+            //Show as raw fuel amount
+            return (b - 128) * 2;
         }
 
         //Get addon byte from ROM table, convert if required
         function byteToAddon(address) {
-
-            //Return raw hex
-            if (document.getElementById('chkShowHex').checked) return "0x" + parseInt(rom.byteAt(address)).toString(16).toUpperCase();
-
-            //Show raw decimal
-            if (document.getElementById('chkShowRaw').checked) return rom.byteAt(address);
-
-            //Show as raw fuel amount
-            return (rom.byteAt(address) - 128) * 2;
+            return addonByteToText(rom.byteAt(address));
         }
 
-        //Save user addon value to ROM, convert if required
+        //Save user addon value to ROM, convert if required. Returns null for text that is not a number
         function addonToByte(addonValue) {
-            addonValue = parseInt(addonValue);
+            var hex = document.getElementById('chkShowHex').checked;
+            addonValue = hex ? parseInt(addonValue, 16) : parseInt(addonValue, 10);
+            if (isNaN(addonValue)) return null;
 
             //No conversion if hex or raw
-            if (document.getElementById('chkShowHex').checked || document.getElementById('chkShowRaw').checked) return constrain(addonValue, 0, 255);
+            if (hex || document.getElementById('chkShowRaw').checked) return constrain(addonValue, 0, 255);
             return constrain(Math.round(addonValue / 2 + 128), 0, 255);
         }
 
@@ -229,18 +244,27 @@ Changelog:
             window.event.keyCode = keyOut;
         }
 
+        //Clamp a multiplier or addon box to its byte range when focus leaves it.
+        //A value clamped to 0x00 or 0xFF shows the boundary; text that is not a number restores the ROM value
         function limitValue(id) {
-            return;
-            /* Removed for now
-            if (id.value > 0 && id.value < 256) return;
-            alert("Value must be between 0-255")
-            if (id.value > 255) id.value = 255;
-            if (id.value < 0) id.value = 0;
-            */
+            var name = String(id.name);
+            var isXplier = name.indexOf('txtRowXplier') === 0;
+            var row = parseInt(name.replace(/\D/g, ''), 10) - 1;
+            var b = isXplier ? mapXplierToByte(id.value) : addonToByte(id.value);
+            if (b === null) {
+                id.value = isXplier ? byteToMapXplier(tableAddress + row) : byteToAddon(tableAddress + 20 + row);
+                return;
+            }
+            if (b === 0 || b === 255) id.value = isXplier ? xplierByteToText(b) : addonByteToText(b);
         }
 
         // Apply chnges to rom..
         function Apply() {
+            //Boxes are clamped when focus leaves them; clamp again in case Apply is reached without that
+            for (var i = 1; i <= 20; i++) {
+                limitValue(FuelXplierFrm['txtRowXplier' + i]);
+                limitValue(FuelXplierFrm['txtRowAddon' + i]);
+            }
             rom.gup();     // begin group undo
             rom.byteAt(tableAddress + 0) = mapXplierToByte(FuelXplierFrm.txtRowXplier1.value);
             rom.byteAt(tableAddress + 1) = mapXplierToByte(FuelXplierFrm.txtRowXplier2.value);
