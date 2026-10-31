@@ -36,12 +36,9 @@ function loadDefaults() {
     Optionfrm.txtICSOn.value        = P13.rpm_byteToRPM(rom.byteAt(address.ICS_ON_LOC));
     Optionfrm.txtICSOff.value       = P13.rpm_byteToRPM(rom.byteAt(address.ICS_OFF_LOC));
 
-    // Turn off checksum and enable compat mode by default
-    Optionfrm.ChkSumCheckBox.checked = true;
-    handle_checksumAndRunaway(true);
-    Optionfrm.P12Compatbox.checked = true;
-    handle_ECUCompatibility(true);
-    
+    // Checksum disable and ECU compatibility are applied when the ROM is opened
+    // (P13.applyDefaultPatchesOnOpen), so the page only shows their state.
+
     // Initialize all check boxes
     callHandlers();
 }
@@ -713,48 +710,14 @@ function handle_debugMode(toROM) {
 }
 
 
-/** Skips over the code that resets the ECU when the code execution takes longer than expected.
-    When features are added to the ROM , this check will cause high RPM resets if left alone */
-function removeRunawayCodeCheck(patchROM) {
-    var RUNAWAY_CODE_PATCH_LOC = 0x3951;
-    var RUNAWAY_CODE_STOCK_CODE = 0xCD; // Conditional Jump over fail code
-    var RUNAWAY_CODE_PATCH_CODE = 0xCB; // Unconditional Jump over fail code
-
-    // Patch ROM
-    if (patchROM) {
-        rom.byteAt(RUNAWAY_CODE_PATCH_LOC) = RUNAWAY_CODE_PATCH_CODE;
-        return;
-    }
-
-    // Revert to Stock
-    rom.byteAt(RUNAWAY_CODE_PATCH_LOC) = RUNAWAY_CODE_STOCK_CODE;
-}
-
-/** remove ROM Checksum and remove runaway code check */
+/** remove ROM Checksum and remove runaway code check (patch bytes in P13Helper.js) */
 function handle_checksumAndRunaway(toROM) {
-    // Forces conditional jumps to both checksum locations 
-    var CHECKSUM1_PATCH_LOC = 0x0d26;
-    var CHECKSUM2_PATCH_LOC = 0x09db;
-    var CHECKSUM_PATCH_CODE = 0xcb;
-    var CHECKSUM_STOCK_CODE = 0xc9
     if (toROM) {
-        if (Optionfrm.ChkSumCheckBox.checked == true) {
-            rom.byteAt(CHECKSUM1_PATCH_LOC) = CHECKSUM_PATCH_CODE;
-            rom.byteAt(CHECKSUM2_PATCH_LOC) = CHECKSUM_PATCH_CODE;
-            removeRunawayCodeCheck(true);
-        }
-        else {
-            rom.byteAt(CHECKSUM1_PATCH_LOC) = CHECKSUM_STOCK_CODE;
-            rom.byteAt(CHECKSUM2_PATCH_LOC) = CHECKSUM_STOCK_CODE;
-            removeRunawayCodeCheck(false);
-        }
+        P13.opt_setChecksumDisabled(Optionfrm.ChkSumCheckBox.checked == true);
         return;
     }
 
-    Optionfrm.ChkSumCheckBox.checked = false;
-    if (rom.byteAt(CHECKSUM1_PATCH_LOC) != CHECKSUM_STOCK_CODE && rom.byteAt(CHECKSUM2_PATCH_LOC) != CHECKSUM_STOCK_CODE) {
-        Optionfrm.ChkSumCheckBox.checked = true;
-    }
+    Optionfrm.ChkSumCheckBox.checked = P13.opt_isChecksumDisabled();
 }
 
 /** IACV error bypass */
@@ -802,48 +765,14 @@ function handle_VSS(toROM) {
     }
 }
 
-/** ECU Compatibilty  */
+/** ECU Compatibilty (patch bytes and notes in P13Helper.js) */
 function handle_ECUCompatibility(toROM) {
-    /* Allows the p13 rom to be run on other ECUS
-    Merges the RP jumper index table with the indexes from other ROMS such as
-    P11, p12, p14, p39 AND P51
-    
-    It's worth noting that the reason you can't move a stock ROM from a 
-    P13 to a P12 (for example) is because the RP jumpers will look up an 
-    invalid value from tbl_6d56, telling the ECU that there is a 
-    ROM / Hardware mismatch and throw a BRK code and stay in a reset 
-    loop (limp mode). The compatibility patch on the Options page actually 
-    just populates this table with known indices in the expected locations, 
-    allowing the ROM to be run on all the known (to me) ECUs that run the 
-    same code base. */
-
-    var RP_JUMPER_INDEX_TABLE_LOC = 0x6d56;
-    var RP_JUMPER_INDEX_USP13_OFFSET = 17;
-    var RP_JUMPER_INDEX_USP13_VALUES = new Array(0x12, 0x13);
-    var RP_JUMPER_INDEX_MERGED_TBL = new Array(
-        0x02, 0x03, 0xFF, 0x06, 0x05,
-        0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
-        0x0F, 0xFF, 0xFF, 0xFF, 0x10,
-        0xFF, 0xFF, 0x12, 0x13, 0x01,
-        0x07, 0x08, 0x09, 0xFF, 0x0B
-    );
     if (toROM) {
-        if (Optionfrm.P12Compatbox.checked == true) {
-            P13.rom_write(RP_JUMPER_INDEX_TABLE_LOC, RP_JUMPER_INDEX_MERGED_TBL, RP_JUMPER_INDEX_MERGED_TBL.length);
-
-        }
-        // Restore table to stock US p13
-        else {
-            P13.rom_fill(RP_JUMPER_INDEX_TABLE_LOC, RP_JUMPER_INDEX_TABLE_LOC + RP_JUMPER_INDEX_MERGED_TBL.length - 1, 0xff);
-            P13.rom_write(RP_JUMPER_INDEX_TABLE_LOC + RP_JUMPER_INDEX_USP13_OFFSET, RP_JUMPER_INDEX_USP13_VALUES, RP_JUMPER_INDEX_USP13_VALUES.length);
-        }
+        P13.opt_setECUCompatibility(Optionfrm.P12Compatbox.checked == true);
         return;
     }
 
-    Optionfrm.P12Compatbox.checked = false;
-    if (rom.byteAt(RP_JUMPER_INDEX_TABLE_LOC) != 0xFF) {
-        Optionfrm.P12Compatbox.checked = true;
-    }
+    Optionfrm.P12Compatbox.checked = P13.opt_isECUCompatibilityOn();
 }
 
 // Handle transmission type checkboxes and states

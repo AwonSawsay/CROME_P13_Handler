@@ -504,6 +504,9 @@ function __P13EventHooks() {
     address.DefineAddresses();
     notifiedAlready = false;
 
+    // Checksum disable and ECU compatibility are on by default: apply both when neither is present
+    P13.applyDefaultPatchesOnOpen();
+
 }
 include('handlers\\P13_Options\\P13Helper.js');                  // P13 helper functions 
 include('handlers\\P13_Options\\P13Addresses.js');               // P13 Addresses

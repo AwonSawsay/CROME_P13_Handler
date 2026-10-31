@@ -239,8 +239,87 @@ var P13 = {
         
     },
 
+    //############### Default Patches ##########################
+    // Checksum / runaway disable and ECU compatibility are on by default. They are applied when a
+    // ROM is opened with neither one present (P13.js __P13EventHooks), not by the Options page.
+
+    /** True when both ROM checksum checks are patched out */
+    opt_isChecksumDisabled: function() {
+        // Forces conditional jumps at both checksum locations
+        var CHECKSUM1_PATCH_LOC = 0x0d26;
+        var CHECKSUM2_PATCH_LOC = 0x09db;
+        var CHECKSUM_STOCK_CODE = 0xc9;
+        return rom.byteAt(CHECKSUM1_PATCH_LOC) != CHECKSUM_STOCK_CODE && rom.byteAt(CHECKSUM2_PATCH_LOC) != CHECKSUM_STOCK_CODE;
+    },
+
+    /** Disable (true) or restore (false) both ROM checksum checks and the runaway code check
+     *  When features are added to the ROM, the runaway check causes high RPM resets if left alone */
+    opt_setChecksumDisabled: function(disable) {
+        var CHECKSUM1_PATCH_LOC = 0x0d26;
+        var CHECKSUM2_PATCH_LOC = 0x09db;
+        var CHECKSUM_PATCH_CODE = 0xcb;
+        var CHECKSUM_STOCK_CODE = 0xc9;
+        var RUNAWAY_CODE_PATCH_LOC = 0x3951;
+        var RUNAWAY_CODE_STOCK_CODE = 0xCD; // Conditional Jump over fail code
+        var RUNAWAY_CODE_PATCH_CODE = 0xCB; // Unconditional Jump over fail code
+
+        rom.byteAt(CHECKSUM1_PATCH_LOC) = disable ? CHECKSUM_PATCH_CODE : CHECKSUM_STOCK_CODE;
+        rom.byteAt(CHECKSUM2_PATCH_LOC) = disable ? CHECKSUM_PATCH_CODE : CHECKSUM_STOCK_CODE;
+        rom.byteAt(RUNAWAY_CODE_PATCH_LOC) = disable ? RUNAWAY_CODE_PATCH_CODE : RUNAWAY_CODE_STOCK_CODE;
+    },
+
+    /** True when the ECU compatibility RP jumper index table is installed */
+    opt_isECUCompatibilityOn: function() {
+        var RP_JUMPER_INDEX_TABLE_LOC = 0x6d56;
+        return rom.byteAt(RP_JUMPER_INDEX_TABLE_LOC) != 0xFF;
+    },
+
+    /** ECU Compatibility on (true) or restore stock US P13 (false)
+     * Allows the p13 rom to be run on other ECUS
+     * Merges the RP jumper index table with the indexes from other ROMS such as
+     * P11, p12, p14, p39 AND P51
+     *
+     * It's worth noting that the reason you can't move a stock ROM from a
+     * P13 to a P12 (for example) is because the RP jumpers will look up an
+     * invalid value from tbl_6d56, telling the ECU that there is a
+     * ROM / Hardware mismatch and throw a BRK code and stay in a reset
+     * loop (limp mode). The compatibility patch on the Options page actually
+     * just populates this table with known indices in the expected locations,
+     * allowing the ROM to be run on all the known (to me) ECUs that run the
+     * same code base. */
+    opt_setECUCompatibility: function(enable) {
+        var RP_JUMPER_INDEX_TABLE_LOC = 0x6d56;
+        var RP_JUMPER_INDEX_USP13_OFFSET = 17;
+        var RP_JUMPER_INDEX_USP13_VALUES = new Array(0x12, 0x13);
+        var RP_JUMPER_INDEX_MERGED_TBL = new Array(
+            0x02, 0x03, 0xFF, 0x06, 0x05,
+            0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            0x0F, 0xFF, 0xFF, 0xFF, 0x10,
+            0xFF, 0xFF, 0x12, 0x13, 0x01,
+            0x07, 0x08, 0x09, 0xFF, 0x0B
+        );
+        if (enable) {
+            this.rom_write(RP_JUMPER_INDEX_TABLE_LOC, RP_JUMPER_INDEX_MERGED_TBL, RP_JUMPER_INDEX_MERGED_TBL.length);
+            return;
+        }
+        // Restore table to stock US p13
+        this.rom_fill(RP_JUMPER_INDEX_TABLE_LOC, RP_JUMPER_INDEX_TABLE_LOC + RP_JUMPER_INDEX_MERGED_TBL.length - 1, 0xff);
+        this.rom_write(RP_JUMPER_INDEX_TABLE_LOC + RP_JUMPER_INDEX_USP13_OFFSET, RP_JUMPER_INDEX_USP13_VALUES, RP_JUMPER_INDEX_USP13_VALUES.length);
+    },
+
+    /** On ROM open: when neither default patch is present, apply both and tell the user */
+    applyDefaultPatchesOnOpen: function() {
+        if (this.opt_isChecksumDisabled() || this.opt_isECUCompatibilityOn()) return;
+        rom.gup();          // begin group undo
+        this.opt_setChecksumDisabled(true);
+        this.opt_setECUCompatibility(true);
+        rom.gup();          // end group undo
+        alert("This ROM did not have the checksum / runaway check disable or the ECU compatibility patch.\n\n" +
+            "Both have been enabled. They can be turned off in the Options menu.");
+    },
+
     //############### Misc Functions #############################
-    
+
 showVersion: function() {
     include('handlers\\P13_Options\\OptionsPage.js');                      // P13 Options page JS
     include('handlers\\P13_Options\\ECUFeatures.js');                      // ECU Features page JS
