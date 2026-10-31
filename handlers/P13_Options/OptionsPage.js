@@ -6,9 +6,10 @@ This is the supporting code for OptionsPage.html.
 
 Changelog:
     -v2.0   - Initial updated release - March 2026
+    -v2.01  - Default patches move to ROM open; RPM boxes clamp; Apply writes only edits - October 2026
 ********************************************************************/
 
-var P13_OPTIONS_VERSION = '2.0';
+var P13_OPTIONS_VERSION = '2.01';
 
 /// <reference path="./P13Helper.js" />
 /// <reference path="./P13Addresses.js" />
