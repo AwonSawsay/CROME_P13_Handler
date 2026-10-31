@@ -187,9 +187,10 @@ var P13 = {
         return Math.round(1875000 / w);
     },
 
-    /** Convert RPM to word */
+    /** Convert RPM to word, clamped to the word range (0 RPM or less gives the lowest RPM, 0xFFFF) */
     rpm_RPMToWord: function(r) {
-        return Math.round(1875000 / r);
+        if (r <= 0) return 0xFFFF;
+        return Math.max(1, Math.min(0xFFFF, Math.round(1875000 / r)));
     },
     
     //############### ECU Option Functions #####################

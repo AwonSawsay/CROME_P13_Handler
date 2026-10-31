@@ -35,6 +35,7 @@ function loadDefaults() {
     Optionfrm.txtIABOff.value       = P13.rpm_byteToRPM(rom.byteAt(address.IAB_OFF_LOC));
     Optionfrm.txtICSOn.value        = P13.rpm_byteToRPM(rom.byteAt(address.ICS_ON_LOC));
     Optionfrm.txtICSOff.value       = P13.rpm_byteToRPM(rom.byteAt(address.ICS_OFF_LOC));
+    rememberLoadedText();
 
     // Checksum disable and ECU compatibility are applied when the ROM is opened
     // (P13.applyDefaultPatchesOnOpen), so the page only shows their state.
@@ -191,25 +192,68 @@ function optionSelect(m) {
 
 }
 
-/** Update ROM with all RPM values from the option check boxes */
+// ************* RPM Text Boxes *****************************
+// Text each RPM box showed when the page loaded. Apply writes only boxes whose text changed, so
+// display rounding never rewrites a value the user did not edit.
+var loadedText = {};
+var WORD_RPM_FIELDS = ['txtHiRevCut', 'txtHiRevRes', 'txtUnknwnRevCut', 'txtUnknwnRevRes',
+                       'txtLoRevCut', 'txtLoRevRes', 'txtTargetIdle1', 'txtTargetIdle2'];
+var BYTE_RPM_FIELDS = ['txtHiVtecOn', 'txtHiVtecOff', 'txtLoVtecOn', 'txtLoVtecOff',
+                       'txtIABOn', 'txtIABOff', 'txtICSOn', 'txtICSOff'];
+var WORD_RPM_MIN = 29;      // Lowest RPM a word holds: 1875000 / 0xFFFF = 28.6
+var BYTE_RPM_MAX = 10054;   // RPM shown for byte 0xFF (P13.rpm_byteToRPM)
+
+/** Remember the text of every RPM box */
+function rememberLoadedText() {
+    var i;
+    for (i = 0; i < WORD_RPM_FIELDS.length; i++) loadedText[WORD_RPM_FIELDS[i]] = String(Optionfrm[WORD_RPM_FIELDS[i]].value);
+    for (i = 0; i < BYTE_RPM_FIELDS.length; i++) loadedText[BYTE_RPM_FIELDS[i]] = String(Optionfrm[BYTE_RPM_FIELDS[i]].value);
+}
+
+/** True if the user changed the box since the page loaded */
+function fieldChanged(name) {
+    return String(Optionfrm[name].value) != loadedText[name];
+}
+
+/** Clamp a word RPM box to the range a word can hold. Blank or invalid text restores the loaded value */
+function clampWordRpmField(field) {
+    var rpm = parseFloat(field.value);
+    if (isNaN(rpm)) { field.value = loadedText[field.name]; return; }
+    if (rpm < WORD_RPM_MIN) field.value = WORD_RPM_MIN;
+}
+
+/** Clamp a byte RPM box to the range a byte can hold. Blank or invalid text restores the loaded value */
+function clampByteRpmField(field) {
+    var rpm = parseFloat(field.value);
+    if (isNaN(rpm)) { field.value = loadedText[field.name]; return; }
+    if (rpm < 0) field.value = 0;
+    if (rpm > BYTE_RPM_MAX) field.value = BYTE_RPM_MAX;
+}
+
+/** Update ROM with the RPM values the user changed */
 function Apply() {
+    var i;
+    // Boxes are clamped when focus leaves them; clamp again in case Apply is reached without that
+    for (i = 0; i < WORD_RPM_FIELDS.length; i++) clampWordRpmField(Optionfrm[WORD_RPM_FIELDS[i]]);
+    for (i = 0; i < BYTE_RPM_FIELDS.length; i++) clampByteRpmField(Optionfrm[BYTE_RPM_FIELDS[i]]);
+
     rom.gup();                              // begin group undo
-    rom.wordAt(address.REV_CUT1_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtHiRevCut.value);
-    rom.wordAt(address.REV_RES1_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtHiRevRes.value);
-    rom.wordAt(address.REV_CUT3_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtUnknwnRevCut.value);
-    rom.wordAt(address.REV_RES3_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtUnknwnRevRes.value);
-    rom.wordAt(address.REV_CUT2_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtLoRevCut.value);
-    rom.wordAt(address.REV_RES2_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtLoRevRes.value);
-    rom.wordAt(address.TARGET_IDLE_1_LOC)   = P13.rpm_RPMToWord(Optionfrm.txtTargetIdle1.value);
-    rom.wordAt(address.TARGET_IDLE_2_LOC)   = P13.rpm_RPMToWord(Optionfrm.txtTargetIdle2.value);
-    rom.byteAt(address.HI_VTEC_ON_LOC)      = P13.rpm_RPMToByte(Optionfrm.txtHiVtecOn.value);
-    rom.byteAt(address.HI_VTEC_OFF_LOC)     = P13.rpm_RPMToByte(Optionfrm.txtHiVtecOff.value);
-    rom.byteAt(address.LO_VTEC_ON_LOC)      = P13.rpm_RPMToByte(Optionfrm.txtLoVtecOn.value);
-    rom.byteAt(address.LO_VTEC_OFF_LOC)     = P13.rpm_RPMToByte(Optionfrm.txtLoVtecOff.value);
-    rom.byteAt(address.IAB_ON_LOC)          = P13.rpm_RPMToByte(Optionfrm.txtIABOn.value);
-    rom.byteAt(address.IAB_OFF_LOC)         = P13.rpm_RPMToByte(Optionfrm.txtIABOff.value);
-    rom.byteAt(address.ICS_ON_LOC)          = P13.rpm_RPMToByte(Optionfrm.txtICSOn.value);
-    rom.byteAt(address.ICS_OFF_LOC)         = P13.rpm_RPMToByte(Optionfrm.txtICSOff.value);    
+    if (fieldChanged('txtHiRevCut'))     rom.wordAt(address.REV_CUT1_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtHiRevCut.value);
+    if (fieldChanged('txtHiRevRes'))     rom.wordAt(address.REV_RES1_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtHiRevRes.value);
+    if (fieldChanged('txtUnknwnRevCut')) rom.wordAt(address.REV_CUT3_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtUnknwnRevCut.value);
+    if (fieldChanged('txtUnknwnRevRes')) rom.wordAt(address.REV_RES3_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtUnknwnRevRes.value);
+    if (fieldChanged('txtLoRevCut'))     rom.wordAt(address.REV_CUT2_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtLoRevCut.value);
+    if (fieldChanged('txtLoRevRes'))     rom.wordAt(address.REV_RES2_LOC)        = P13.rpm_RPMToWord(Optionfrm.txtLoRevRes.value);
+    if (fieldChanged('txtTargetIdle1'))  rom.wordAt(address.TARGET_IDLE_1_LOC)   = P13.rpm_RPMToWord(Optionfrm.txtTargetIdle1.value);
+    if (fieldChanged('txtTargetIdle2'))  rom.wordAt(address.TARGET_IDLE_2_LOC)   = P13.rpm_RPMToWord(Optionfrm.txtTargetIdle2.value);
+    if (fieldChanged('txtHiVtecOn'))     rom.byteAt(address.HI_VTEC_ON_LOC)      = P13.rpm_RPMToByte(Optionfrm.txtHiVtecOn.value);
+    if (fieldChanged('txtHiVtecOff'))    rom.byteAt(address.HI_VTEC_OFF_LOC)     = P13.rpm_RPMToByte(Optionfrm.txtHiVtecOff.value);
+    if (fieldChanged('txtLoVtecOn'))     rom.byteAt(address.LO_VTEC_ON_LOC)      = P13.rpm_RPMToByte(Optionfrm.txtLoVtecOn.value);
+    if (fieldChanged('txtLoVtecOff'))    rom.byteAt(address.LO_VTEC_OFF_LOC)     = P13.rpm_RPMToByte(Optionfrm.txtLoVtecOff.value);
+    if (fieldChanged('txtIABOn'))        rom.byteAt(address.IAB_ON_LOC)          = P13.rpm_RPMToByte(Optionfrm.txtIABOn.value);
+    if (fieldChanged('txtIABOff'))       rom.byteAt(address.IAB_OFF_LOC)         = P13.rpm_RPMToByte(Optionfrm.txtIABOff.value);
+    if (fieldChanged('txtICSOn'))        rom.byteAt(address.ICS_ON_LOC)          = P13.rpm_RPMToByte(Optionfrm.txtICSOn.value);
+    if (fieldChanged('txtICSOff'))       rom.byteAt(address.ICS_OFF_LOC)         = P13.rpm_RPMToByte(Optionfrm.txtICSOff.value);
     setRomVersion();                        // Write version info into ROM
     rom.gup();                              // end group undo
     window.close();
@@ -290,13 +334,12 @@ function _writeMultiplierToROM(xplier) {
     rom.byteAt(address.RP7_FUEL_XPLIER_LSB_LOC) = xplier & 0xff;
 }
 
-/** Constrain Multiplier TextBox value then write to ROM */
+/** Clamp Multiplier TextBox value to -99..400 then write to ROM. Blank or invalid text keeps the ROM value */
 function constrainThenWriteMultiplier(id) {
-    var oldValue = id.value;
-    var newValue = Math.max(-99, Math.min(400, oldValue));
-    id.value = newValue;
-    if (oldValue != newValue) alert("Valid range: -99 to 400");
-    _writeMultiplierToROM(_percentToMultiplier(parseInt(id.value)));
+    var percent = parseInt(id.value, 10);
+    if (isNaN(percent)) percent = Math.round(_multiplierToPercent(P13.getCustomXplierValue()));
+    id.value = Math.max(-99, Math.min(400, percent));
+    _writeMultiplierToROM(_percentToMultiplier(parseInt(id.value, 10)));
     window.external.refresh();
 }
 
@@ -493,7 +536,12 @@ function handle_speedLimit(toROM) {
     if (toROM) {
         if (Optionfrm.SpdLimitBox.checked == true) {
             Optionfrm.txtSpdLimit.disabled = false;
-            rom.byteAt(rom.addressOf('SPEED_LIMIT')) = Math.min(0xFF, Optionfrm.txtSpdLimit.value);
+            // Clamp to a byte. Blank or invalid text keeps the ROM value
+            var limit = parseInt(Optionfrm.txtSpdLimit.value, 10);
+            if (isNaN(limit)) limit = rom.byteAt(rom.addressOf('SPEED_LIMIT'));
+            limit = Math.max(0, Math.min(0xFF, limit));
+            Optionfrm.txtSpdLimit.value = limit;
+            rom.byteAt(rom.addressOf('SPEED_LIMIT')) = limit;
         }
         else {
             Optionfrm.txtSpdLimit.value = 255;
