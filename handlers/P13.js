@@ -80,8 +80,10 @@ function __P13SetRevScalar(mapType, index, value) {
     // Get RPM scalar table address
     var RPMScalarTableLoc = __P13GetRPMScalarTable(mapType);
 
-    // Set RPM scalar value
-    rom.wordAt(RPMScalarTableLoc + index) = 1875000 / value;
+    // Set RPM scalar value, clamped to the word range (0 RPM or less gives the lowest RPM, 0xFFFF).
+    // Fractions are left for CROME to round, as before.
+    var word = (value <= 0) ? 0xFFFF : Math.max(1, Math.min(0xFFFF, 1875000 / value));
+    rom.wordAt(RPMScalarTableLoc + index) = word;
 
 }
 
@@ -134,17 +136,24 @@ function __P13SetMapScalar(mapType, index, value) {
     var mbar5v = rom.addressOf('NFO_MAP_MAX') - 0x8000;
 
     // Get scalar address
-    MAPScalarAddress = __P13GetMAPScalarTableLoc(mapType) + index;
+    var tableLoc = __P13GetMAPScalarTableLoc(mapType);
+    MAPScalarAddress = tableLoc + index;
 
-    // Offset MAP 
+    // Convert mBar to the stored byte: offset MAP, or raw high byte
+    var scalarByte;
     if (rom.byteAt(address.MAP_USING_OFFSET_SCALARS_LOC) == 0xFF) {
-        rom.byteAt(MAPScalarAddress) = P13.map_mBarToOffset(value);
-        return
+        scalarByte = P13.map_mBarToOffset(value);
+    }
+    else {
+        scalarByte = P13.map_mBarToRawHighByte(value, mbar0v, mbar5v);
     }
 
-    // Convert mbar to Raw high byte
-    rom.byteAt(MAPScalarAddress) = P13.map_mBarToRawHighByte(value, mbar0v, mbar5v);
-   
+    // Keep the axis in order: clamp between the neighbouring columns
+    var lower = (index > 0) ? rom.byteAt(tableLoc + index - 1) : 0x00;
+    var upper = (index < P13.getTableSize().width - 1) ? rom.byteAt(tableLoc + index + 1) : 0xFF;
+    if (lower <= upper) scalarByte = Math.max(lower, Math.min(upper, scalarByte));
+
+    rom.byteAt(MAPScalarAddress) = scalarByte;
 }
 
 /**Get address of the MAP scalar table for the given table */
