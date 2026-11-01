@@ -241,8 +241,9 @@ var P13 = {
     },
 
     //############### Default Patches ##########################
-    // Checksum / runaway disable and ECU compatibility are on by default. They are applied when a
-    // ROM is opened with neither one present (P13.js __P13EventHooks), not by the Options page.
+    // Checksum / runaway disable and ECU compatibility are on by default. When a ROM is opened with
+    // neither one present, P13.js __P13EventHooks only flags it; both are applied when the Options
+    // menu is next opened (__P13DoShowOptions), before the Options page loads.
 
     /** True when both ROM checksum checks are patched out */
     opt_isChecksumDisabled: function() {
@@ -308,15 +309,20 @@ var P13 = {
         this.rom_write(RP_JUMPER_INDEX_TABLE_LOC + RP_JUMPER_INDEX_USP13_OFFSET, RP_JUMPER_INDEX_USP13_VALUES, RP_JUMPER_INDEX_USP13_VALUES.length);
     },
 
-    /** On ROM open: when neither default patch is present, apply both and tell the user */
-    applyDefaultPatchesOnOpen: function() {
-        if (this.opt_isChecksumDisabled() || this.opt_isECUCompatibilityOn()) return;
+    /** True when neither default patch (checksum disable, ECU compatibility) is present */
+    needsDefaultPatches: function() {
+        return !this.opt_isChecksumDisabled() && !this.opt_isECUCompatibilityOn();
+    },
+
+    /** Called when Options is opened after a ROM with neither default patch was loaded: apply both and tell the user */
+    applyDefaultPatches: function() {
+        if (!this.needsDefaultPatches()) return;
         rom.gup();          // begin group undo
         this.opt_setChecksumDisabled(true);
         this.opt_setECUCompatibility(true);
         rom.gup();          // end group undo
         alert("This ROM did not have the checksum / runaway check disable or the ECU compatibility patch.\n\n" +
-            "Both have been enabled. They can be turned off in the Options menu.");
+            "Both have now been enabled. They can be turned off on this Options page.");
     },
 
     //############### Misc Functions #############################
