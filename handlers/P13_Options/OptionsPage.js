@@ -38,8 +38,8 @@ function loadDefaults() {
     Optionfrm.txtICSOff.value       = P13.rpm_byteToRPM(rom.byteAt(address.ICS_OFF_LOC));
     rememberLoadedText();
 
-    // Checksum disable and ECU compatibility are applied when the ROM is opened
-    // (P13.applyDefaultPatchesOnOpen), so the page only shows their state.
+    // Checksum disable and ECU compatibility are applied by the handler before this page
+    // opens (__P13DoShowOptions, P13.applyDefaultPatches), so the page only shows their state.
 
     // Initialize all check boxes
     callHandlers();

@@ -59,6 +59,7 @@ var MAX_FUEL_BYTE_EXTENDED_RANGE = 0xff;            // Byte limit when using lar
 var FUEL_DISPLAY_REDUCTION = 0.2500111982082867;    // Friendly display conversion value
 var notifiedAlready = false;                        // Indicates if user has already been informed about the fuel boundaries
 var continueWarning = true;                         // Does user want to keep receiving cell boundary warnings
+var defaultPatchesPending = false;                  // ROM opened with neither default patch: apply both when Options is opened
 
 //*********************************************************************
 // SCALARS
@@ -498,6 +499,12 @@ function __calculateMainFuelBase(MAPMultiplier, Addon, MAPValue){
 // This is triggered when the user clicks on 'Options'
 // It's preferred to load an html based custom options page here
 function __P13DoShowOptions() {
+    // Apply the default patches here rather than on ROM open: a modal alert inside CROME's
+    // load sequence raises "Thread Error: The handle is invalid (6)" (CP-020)
+    if (defaultPatchesPending) {
+        defaultPatchesPending = false;
+        P13.applyDefaultPatches();
+    }
     showBrowser('handlers\\P13_Options\\OptionsPage.html', 670, 675, resizable=true);
     refresh();
 }
@@ -524,8 +531,9 @@ function __P13EventHooks() {
     address.DefineAddresses();
     notifiedAlready = false;
 
-    // Checksum disable and ECU compatibility are on by default: apply both when neither is present
-    P13.applyDefaultPatchesOnOpen();
+    // Checksum disable and ECU compatibility are on by default: when neither is present,
+    // apply both when the Options menu is next opened (no ROM writes or dialogs during load)
+    defaultPatchesPending = P13.needsDefaultPatches();
 
 }
 include('handlers\\P13_Options\\P13Helper.js');                  // P13 helper functions 
