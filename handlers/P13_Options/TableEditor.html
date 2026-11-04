@@ -205,6 +205,10 @@ Changelog:
                         document.getElementById('radTopTrim').checked = true;
                         topRowHeader = "Trim %";
                         break;
+                    case 256:
+                        document.getElementById('radTopTrim').checked = true;
+                        topRowHeader = "% of main fuel";
+                        break;
                     default: document.getElementById('radTopRaw').checked = true;
                         topRowHeader = "Raw";
                         break;
@@ -266,6 +270,10 @@ Changelog:
                     case 220:
                         document.getElementById('radBotTrim').checked = true;
                         botRowHeader = "Trim %";
+                        break;
+                    case 256:
+                        document.getElementById('radBotTrim').checked = true;
+                        botRowHeader = "% of main fuel";
                         break;
                     default:
                         document.getElementById('radBotRaw').checked = true;
@@ -519,6 +527,12 @@ Changelog:
                 case 2000:
                     trim = true;
                     var base = 8192;
+                    break;
+                // CP-024: tip-out scale. The ECU uses only the low byte, as byte/256 of main fuel, and a low
+                // byte of 0 skips the multiply (P13 0x4933-0x494F, 0x3133-0x313C), so writes stay in 0x0001-0x0100
+                case 256:
+                    if (toRaw) converted = Math.max(1, Math.min(0x100, Math.round(data * 256 / 100)));
+                    else converted = (data & 0xff) == 0 ? 100 : Math.round((data & 0xff) * 100 / 256 * 100) / 100;
                     break;
                 // 0x200 Low Byte only provided
                 case 220:
@@ -1382,7 +1396,7 @@ Changelog:
                             <option value="0x5168,0x5176,2,1,7">[Tbl_5168] - TipinIgntionAdjustmentPerRPM</option>
                             <option value="0x50be,0x50c8,2,1,5">[Tbl_50be] - TipIn_InitialTPSThresholdFor_IAT_IGNAdj</option>
                             <option value="0x5310,0x532e,6,0,12">[Tbl_5310] - TipInFuelAddon_TPSDeltaVsRawFuel</option>
-                            <option value="0x532e,0x5346,6,0,80">[Tbl_532e] - TipInByGear_TPSDeltaVsFuelTrim</option>
+                            <option value="0x532e,0x5346,6,0,256">[Tbl_532e] - TipInByGear_TPSDeltaVsFuelTrim</option>
                             <option value="0x5346,0x534a,2,4,80">[Tbl_5346] - TipInFuelTrim_BaroAdj</option>
                             <option value="0x534a,0x5356,2,2,80">[Tbl_534a] - TipInFuelAddon_ECTOffset</option>
                             <option value="0,0,0,0,0">----------------------------------- Closed Loop Tables ---------------------------------------------</option>
