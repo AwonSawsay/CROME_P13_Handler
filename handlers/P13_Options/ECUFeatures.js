@@ -942,6 +942,13 @@ function updateROM() {
     }
     var settings = collectFormSettings();
     var featureBytes = generateFeatureBytes(settings);
+    // CP-022: with the stock masks the handler changes nothing at run time, so do not install it.
+    var usesStockMasks = featureBytes.enableBytes.join() === "0,0,0" && featureBytes.disableBytes.join() === "47,93,7";
+    if (usesStockMasks && rom.byteAt(address.TABLES_USING_STANDARD_SIZE) !== 0x00) {
+        rpRomHandler("remove");
+        setRPJumperAdjValuesInRomFromForm();
+        return;
+    }
     var romHandler = rpRomHandler("add"); // ensure patch code is added
 
     // Write enable and disable bytes to ROM
