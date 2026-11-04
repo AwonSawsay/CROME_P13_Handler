@@ -957,9 +957,10 @@ Changelog:
         function _convert8BitRpm(data, word, toRaw) {
 
             if (word) return _invalidValue(data, "Incorrect conversion for 16 Bit RPM.");
-            var dividend = 240000;
-            var divisor = 64;
-            var range = 0;
+            //CP-026: the ECU routine (P13 0x1FFC-0x2047, tbl_57b7), same as P13.rpm_RPMToByte and rpm_byteToRPM
+            var dividend = 30000;
+            var offset = 128;
+            var band;
 
             //Convert from RPM to Byte
             if (toRaw) {

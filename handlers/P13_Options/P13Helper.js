@@ -171,41 +171,37 @@ var P13 = {
 
     //################## RPM Functions #########################
 
-    /** Convert P13 byte RPM */
+    /** CP-026: lowest whole RPM the ECU reads as this byte (P13 0x1FFC-0x2047, tbl_57b7) */
     rpm_byteToRPM: function(b) {
-        var dividend = 240000;
-        var divisor = 64;
-        var range = Math.floor(b / 0x40);
-        if (b == 0xFE) return 7862;
-        if (b == 0xFF) return 10054;
-        if (b == 0x1) return 514;
-        if (b == 0x0) return 0;
-
-        dividend = dividend >> range;
-        divisor = divisor - (divisor * range)
-
-        return Math.round(1875000 / (dividend / (b + divisor)));
-
+        if (b <= 1) return Math.max(0, b);
+        if (b >= 0xFF) return Math.floor(1875000 / 0xBB) + 1;
+        var dividend = 30000;
+        var offset = 128;
+        for (var band = 0; band < 3 && b < offset + 64; band++) {
+            dividend *= 2;
+            offset -= 64;
+        }
+        return Math.ceil(1875000 * (b - offset) / dividend);
     },
 
-    /** Convert RPM to P13 byte */
+    /** CP-026: the byte the ECU computes at this RPM. Period compares use period < T <=> 1875000 < T * rpm */
     rpm_RPMToByte: function(rpm) {
-        var dividend = 240000;
-        var divisor = 64;
-        var range = 0;
-        if (rpm > 10053) return 0xff;
-        if (rpm > 7862) return 0xfe;
-        if (rpm == 0) return 0x0;
-        if (rpm < 515) return 0x1;
-        if (rpm > 1014) range++;
-        if (rpm > 2000) range++;
-        if (rpm > 4010) range++;
-
-        dividend = dividend >> range;
-        divisor = divisor - (divisor * range)
-
-        return Math.floor((dividend / (1875000 / rpm)) - divisor);
-
+        rpm = Math.floor(Number(rpm));
+        if (!(rpm > 0)) return 0;
+        if (1875000 < 0xBB * rpm) return 0xFF;
+        if (1875000 < 0xEA * rpm) return 0xFE;
+        if (1875000 >= 0xEA6 * rpm) return 1;
+        var bands = [0x1D4, 0x3A9, 0x753];
+        var dividend = 30000;
+        var offset = 128;
+        for (var i = 0; i < bands.length; i++) {
+            if (1875000 < bands[i] * rpm) break;
+            dividend *= 2;
+            offset -= 64;
+        }
+        var value = Math.floor(dividend * rpm / 1875000) + offset;
+        if (value >= 0xFF) return 0xFE;
+        return value <= 0 ? 1 : value;
     },
 
     /** Convert word to RPM */
