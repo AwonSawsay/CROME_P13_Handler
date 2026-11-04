@@ -963,34 +963,31 @@ Changelog:
 
             //Convert from RPM to Byte
             if (toRaw) {
-
-                if (data > 10053) return 0xff;
-                if (data > 7862) return 0xfe;
-                if (data == 0) return 0x0;
-                if (data < 515) return 0x1;
-                if (data > 1014) range++;
-                if (data > 2000) range++;
-                if (data > 4010) range++;
-
-                dividend = dividend >> range;
-                divisor = divisor - (divisor * range)
-
-                return Math.round((dividend / (1875000 / data)) - divisor);
+                var rpm = Math.floor(data);
+                if (!(rpm > 0)) return 0x0;
+                if (1875000 < 0xBB * rpm) return 0xff;
+                if (1875000 < 0xEA * rpm) return 0xfe;
+                if (1875000 >= 0xEA6 * rpm) return 0x1;
+                var bands = [0x1D4, 0x3A9, 0x753];
+                for (band = 0; band < bands.length; band++) {
+                    if (1875000 < bands[band] * rpm) break;
+                    dividend *= 2;
+                    offset -= 64;
+                }
+                var value = Math.floor(dividend * rpm / 1875000) + offset;
+                if (value >= 0xff) return 0xfe;
+                return value <= 0 ? 0x1 : value;
             }
 
             //Convert from byte to RPM
             if (data > 0xff) return _invalidValue(data, "8 Bit RPM conversion (Overflow)");
-
-            range = Math.floor(data / 0x40);
-            if (data == 0xFE) return 7862;
-            if (data == 0xFF) return 10054;
-            if (data == 0x1) return 514;
-            if (data == 0x0) return 0;
-
-            dividend = dividend >> range;
-            divisor = divisor - (divisor * range)
-
-            return Math.round(1875000 / (dividend / (data + divisor)));
+            if (data <= 1) return data;
+            if (data == 0xff) return Math.floor(1875000 / 0xBB) + 1;
+            for (band = 0; band < 3 && data < offset + 64; band++) {
+                dividend *= 2;
+                offset -= 64;
+            }
+            return Math.ceil(1875000 * (data - offset) / dividend);
         }
 
         // Convert RPM
@@ -999,9 +996,10 @@ Changelog:
             //Convert 16 bit RPM to word or back
             if (word) {
                 if (toRaw) {
-                    if (data >= 1875000) return 0x0000;      //Displayed for words below 30
-                    if (data <= 29) return 0xffff;           //Displayed for words above 0xFC8E
-                    return Math.min(0xffff, Math.round(1875000 / data));
+                    //Untouched cells keep their raw word (cellsToRaw), so typed RPM can be exact
+                    if (data != Math.floor(data)) return _invalidValue(data, "RPM must be a whole number.");
+                    if (data <= 0) return 0xffff;
+                    return Math.max(1, Math.min(0xffff, Math.round(1875000 / data)));
                 }
                 if (data > 0xfc8e) data = 0xffff;
                 if (data < 30) data = 1;
