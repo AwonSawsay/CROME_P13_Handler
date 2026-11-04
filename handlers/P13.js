@@ -101,11 +101,11 @@ function __P13GetMapScalarInmBar(mapType, index) {
 
     // Convert offset MAP to mBar
     if (rom.byteAt(address.MAP_USING_OFFSET_SCALARS_LOC) == 0xFF) {
-        return P13.map_offsetToMbar(rom.byteAt(MAPScalarAddress));
+        return P13.map_tracedOffsetToMbar(rom.byteAt(MAPScalarAddress));
     }
 
     // Convert raw high byte to mBar
-    return P13.map_rawHighByteTomBar(rom.byteAt(MAPScalarAddress), mbar0v, mbar5v);
+    return P13.map_tracedRawToMbar(rom.byteAt(MAPScalarAddress), mbar0v, mbar5v);
 
 
 }
@@ -146,10 +146,10 @@ function __P13SetMapScalar(mapType, index, value) {
     // Convert mBar to the stored byte: offset MAP, or raw high byte
     var scalarByte;
     if (rom.byteAt(address.MAP_USING_OFFSET_SCALARS_LOC) == 0xFF) {
-        scalarByte = P13.map_mBarToOffset(value);
+        scalarByte = P13.map_tracedMbarToOffset(value);
     }
     else {
-        scalarByte = P13.map_mBarToRawHighByte(value, mbar0v, mbar5v);
+        scalarByte = P13.map_tracedMbarToRaw(value, mbar0v, mbar5v);
     }
 
     // Keep the axis in order: clamp between the neighbouring columns

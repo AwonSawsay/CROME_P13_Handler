@@ -1139,12 +1139,13 @@ Changelog:
             if (word) return _invalidValue(data, "16 Bit Map conversion not available.");
 
             //Convert Map to 8 Bit byte
-            //Round after doubling, so odd bytes (one count is about 3.6 mBar) store exactly as displayed
-            if (toRaw) return Math.min(0xff, Math.round(((((data + 45) / 367) * 51) - 24) * 2));
+            //CP-023: the ROM's scale (label_447f: byte = (A/D word - 0x1800) / 0x80), with the stock sensor
+            //model -70 mBar at 0 V and 1790 mBar at 5 V
+            if (toRaw) return Math.max(0, Math.min(0xff, Math.round((((data + 70) / 1860 * 65536) - 0x1800) / 0x80)));
 
             //Convert byte to MAP
             if (data > 0xff) return _invalidValue(data, "8 Bit MAP conversion byte overflow");
-            return Math.round((((data / 2 + 24) / 51) * 367) - 45);
+            return Math.round(-70 + 1860 * (0x1800 + 0x80 * data) / 65536);
         }
 
         //Convert milliSeconds

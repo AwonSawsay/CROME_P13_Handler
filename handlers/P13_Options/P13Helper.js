@@ -82,6 +82,32 @@ var P13 = {
         return Math.round(Math.max(0, Math.min(255, ((mBar - boundary.min) * 255) / (boundary.max - boundary.min))));
     },
 
+    /** CP-023: mBar for an offset MAP byte, on the ROM's scale (label_447f: byte = (A/D word - 0x1800) / 0x80).
+        For display and typed values. map_offsetToMbar stays as is: Boost.js writes ROM bytes from it. */
+    map_tracedOffsetToMbar: function(offsetMap){
+        var range = address.MAP_STOCK_5V_MBAR - address.MAP_STOCK_0V_MBAR;
+        return Math.round(address.MAP_STOCK_0V_MBAR + range * (0x1800 + 0x80 * offsetMap) / 65536);
+    },
+
+    /** CP-023: offset MAP byte for an mBar value, on the ROM's scale */
+    map_tracedMbarToOffset: function(mBar){
+        var range = address.MAP_STOCK_5V_MBAR - address.MAP_STOCK_0V_MBAR;
+        var adc = (mBar - address.MAP_STOCK_0V_MBAR) / range * 65536;
+        return Math.max(0, Math.min(0xff, Math.round((adc - 0x1800) / 0x80)));
+    },
+
+    /** CP-023: mBar for a raw MAP high byte, the top 8 bits of the A/D word (RAM 0xA5), so byte / 256 of the
+        sensor range. For display and typed values. map_rawHighByteTomBar and map_mBarToRawHighByte stay as
+        they are: Boost.js writes ROM bytes from them. */
+    map_tracedRawToMbar: function(rawMapHighByte, mbar0v, mbar5v){
+        return Math.round(mbar0v + (mbar5v - mbar0v) * rawMapHighByte / 256);
+    },
+
+    /** CP-023: raw MAP high byte for an mBar value */
+    map_tracedMbarToRaw: function(mBar, mbar0v, mbar5v){
+        return Math.max(0, Math.min(0xff, Math.round((mBar - mbar0v) * 256 / (mbar5v - mbar0v))));
+    },
+
     /** Adjust MAP error voltage boundaries. Accepts raw BYTE ONLY or mBar value */
     map_SetDTCBoundaries: function(lowThreshold, highThreshold, convertmBar){
 
