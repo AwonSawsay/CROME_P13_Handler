@@ -125,7 +125,7 @@ function __ExpandMainTables(){
     P13.rom_fill(DESIGNATED_TABLE_AREA_START, DESIGNATED_TABLE_AREA_END, 0x00);
     
     // 00 old map scalar area
-    P13.rom_fill(rom.addressOf('LOW_MAP_SCALAR'), offsetMapScalarTable[0].length -1, 0x00);
+    P13.rom_fill(rom.addressOf('LOW_MAP_SCALAR'), rom.addressOf('LOW_MAP_SCALAR') + offsetMapScalarTable[0].length - 1, 0x00);
     
     // Write resized tables to ROM
     var ignFaultTblLoc = DESIGNATED_TABLE_AREA_START;
