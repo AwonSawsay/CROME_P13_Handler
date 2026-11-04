@@ -53,6 +53,10 @@ function onLoadFeaturesInit() {
         var enableBytes = [romSettings.col1EnableValue, romSettings.col2EnableValue, romSettings.col3EnableValue];
         var disableBytes = [romSettings.col1DisableValue, romSettings.col2DisableValue, romSettings.col3DisableValue];
         loadFeaturesFromBytes(enableBytes, disableBytes);
+    } else {
+        // CP-021: no handler means every feature follows the ECU. These are the masks the stock
+        // code already applies to the three tbl_6cff columns (0x0FF0, 0x1010, 0x1029).
+        loadFeaturesFromBytes([0, 0, 0], [0x2F, 0x5D, 0x07]);
     }
     // Get ROM settings for adjustments and apply to form
     var rpAdjSettings = getRPJumperAdjValuesFromRom();
@@ -399,7 +403,8 @@ function generateFeatureBytes(settings) {
         var byteIndex = map.byte;
         var bitIndex = map.bit;
 
-        var val = settings[feature]; // 0 = off, 1 = on, 2 = ECU Select
+        // 0 = off, 1 = on, 2 = ECU Select. CP-021: no selection means ECU Select, never Off.
+        var val = settings.hasOwnProperty(feature) ? settings[feature] : 2;
 
         if (val === 1) {
             // ON: enable bit = 1, disable bit = 1
