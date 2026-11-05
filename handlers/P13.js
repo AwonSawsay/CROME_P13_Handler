@@ -44,13 +44,15 @@ Features:
     -v2.01  - Fixes from HeadlessCrome testing - October 2026
               Start-up idle maps write their own map, not program code; default patches
               applied on ROM open; text boxes clamp to their range; see GitHub history
+    -v2.02  - Boosted fuel and ignition columns use a value on the axis scale during a
+              MAP fault; Add Boost clears the old MAP scalars; more HeadlessCrome fixes
 
 ********************************************************************/
 // Reference for IDE
 /// <reference path="./P13Helper.js" />
 /// <reference path="./P13Addresses.js" />
 
-var P13_HANDLER_VERSION = "2.01";
+var P13_HANDLER_VERSION = "2.02";
 
 // Fuel values
 var MAX_FUEL_BYTE_VALUE = 0xb0;			            // Actual ECU imposed limit on fuel table values - MAX
