@@ -92,6 +92,12 @@ function Apply() {
         return;
     }
 
+    if (__hasOffsetToAxisRaw() && __offsetToAxisRawConstants(mbar0, mbar5) === null) {
+        alert(CUSTOM_MAP_RANGE_NOT_BOOST_READY);
+        CustMapFrm.txt0VmBar.focus();
+        return;
+    }
+
     window.external.rom.gup();                          // begin group undo
     __setCustomMapSensor(mbar0, mbar5, mbarMinDTC, mbarMaxDTC)
     window.external.rom.gup();                          // end group undo

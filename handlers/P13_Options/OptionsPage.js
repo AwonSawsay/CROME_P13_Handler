@@ -202,7 +202,7 @@ var WORD_RPM_FIELDS = ['txtHiRevCut', 'txtHiRevRes', 'txtUnknwnRevCut', 'txtUnkn
 var BYTE_RPM_FIELDS = ['txtHiVtecOn', 'txtHiVtecOff', 'txtLoVtecOn', 'txtLoVtecOff',
                        'txtIABOn', 'txtIABOff', 'txtICSOn', 'txtICSOff'];
 var WORD_RPM_MIN = 29;      // Lowest RPM a word holds: 1875000 / 0xFFFF = 28.6
-var BYTE_RPM_MAX = 10054;   // RPM shown for byte 0xFF (P13.rpm_byteToRPM)
+var BYTE_RPM_MAX = 10027;   // RPM shown for byte 0xFF (P13.rpm_byteToRPM)
 
 /** Remember the text of every RPM box */
 function rememberLoadedText() {

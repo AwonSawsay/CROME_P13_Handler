@@ -44,13 +44,15 @@ Features:
     -v2.01  - Fixes from HeadlessCrome testing - October 2026
               Start-up idle maps write their own map, not program code; default patches
               applied on ROM open; text boxes clamp to their range; see GitHub history
+    -v2.02  - Boosted fuel and ignition columns use a value on the axis scale during a
+              MAP fault; Add Boost clears the old MAP scalars; more HeadlessCrome fixes
 
 ********************************************************************/
 // Reference for IDE
 /// <reference path="./P13Helper.js" />
 /// <reference path="./P13Addresses.js" />
 
-var P13_HANDLER_VERSION = "2.01";
+var P13_HANDLER_VERSION = "2.02";
 
 // Fuel values
 var MAX_FUEL_BYTE_VALUE = 0xb0;			            // Actual ECU imposed limit on fuel table values - MAX
@@ -101,11 +103,11 @@ function __P13GetMapScalarInmBar(mapType, index) {
 
     // Convert offset MAP to mBar
     if (rom.byteAt(address.MAP_USING_OFFSET_SCALARS_LOC) == 0xFF) {
-        return P13.map_offsetToMbar(rom.byteAt(MAPScalarAddress));
+        return P13.map_tracedOffsetToMbar(rom.byteAt(MAPScalarAddress));
     }
 
     // Convert raw high byte to mBar
-    return P13.map_rawHighByteTomBar(rom.byteAt(MAPScalarAddress), mbar0v, mbar5v);
+    return P13.map_tracedRawToMbar(rom.byteAt(MAPScalarAddress), mbar0v, mbar5v);
 
 
 }
@@ -146,10 +148,10 @@ function __P13SetMapScalar(mapType, index, value) {
     // Convert mBar to the stored byte: offset MAP, or raw high byte
     var scalarByte;
     if (rom.byteAt(address.MAP_USING_OFFSET_SCALARS_LOC) == 0xFF) {
-        scalarByte = P13.map_mBarToOffset(value);
+        scalarByte = P13.map_tracedMbarToOffset(value);
     }
     else {
-        scalarByte = P13.map_mBarToRawHighByte(value, mbar0v, mbar5v);
+        scalarByte = P13.map_tracedMbarToRaw(value, mbar0v, mbar5v);
     }
 
     // Keep the axis in order: clamp between the neighbouring columns

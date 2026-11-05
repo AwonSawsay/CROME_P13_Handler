@@ -205,6 +205,10 @@ Changelog:
                         document.getElementById('radTopTrim').checked = true;
                         topRowHeader = "Trim %";
                         break;
+                    case 256:
+                        document.getElementById('radTopTrim').checked = true;
+                        topRowHeader = "% of main fuel";
+                        break;
                     default: document.getElementById('radTopRaw').checked = true;
                         topRowHeader = "Raw";
                         break;
@@ -266,6 +270,10 @@ Changelog:
                     case 220:
                         document.getElementById('radBotTrim').checked = true;
                         botRowHeader = "Trim %";
+                        break;
+                    case 256:
+                        document.getElementById('radBotTrim').checked = true;
+                        botRowHeader = "% of main fuel";
                         break;
                     default:
                         document.getElementById('radBotRaw').checked = true;
@@ -519,6 +527,12 @@ Changelog:
                 case 2000:
                     trim = true;
                     var base = 8192;
+                    break;
+                // CP-024: tip-out scale. The ECU uses only the low byte, as byte/256 of main fuel, and a low
+                // byte of 0 skips the multiply (P13 0x4933-0x494F, 0x3133-0x313C), so writes stay in 0x0001-0x0100
+                case 256:
+                    if (toRaw) converted = Math.max(1, Math.min(0x100, Math.round(data * 256 / 100)));
+                    else converted = (data & 0xff) == 0 ? 100 : Math.round((data & 0xff) * 100 / 256 * 100) / 100;
                     break;
                 // 0x200 Low Byte only provided
                 case 220:
@@ -943,40 +957,38 @@ Changelog:
         function _convert8BitRpm(data, word, toRaw) {
 
             if (word) return _invalidValue(data, "Incorrect conversion for 16 Bit RPM.");
-            var dividend = 240000;
-            var divisor = 64;
-            var range = 0;
+            //CP-026: the ECU routine (P13 0x1FFC-0x2047, tbl_57b7), same as P13.rpm_RPMToByte and rpm_byteToRPM
+            var dividend = 30000;
+            var offset = 128;
+            var band;
 
             //Convert from RPM to Byte
             if (toRaw) {
-
-                if (data > 10053) return 0xff;
-                if (data > 7862) return 0xfe;
-                if (data == 0) return 0x0;
-                if (data < 515) return 0x1;
-                if (data > 1014) range++;
-                if (data > 2000) range++;
-                if (data > 4010) range++;
-
-                dividend = dividend >> range;
-                divisor = divisor - (divisor * range)
-
-                return Math.round((dividend / (1875000 / data)) - divisor);
+                var rpm = Math.floor(data);
+                if (!(rpm > 0)) return 0x0;
+                if (1875000 < 0xBB * rpm) return 0xff;
+                if (1875000 < 0xEA * rpm) return 0xfe;
+                if (1875000 >= 0xEA6 * rpm) return 0x1;
+                var bands = [0x1D4, 0x3A9, 0x753];
+                for (band = 0; band < bands.length; band++) {
+                    if (1875000 < bands[band] * rpm) break;
+                    dividend *= 2;
+                    offset -= 64;
+                }
+                var value = Math.floor(dividend * rpm / 1875000) + offset;
+                if (value >= 0xff) return 0xfe;
+                return value <= 0 ? 0x1 : value;
             }
 
             //Convert from byte to RPM
             if (data > 0xff) return _invalidValue(data, "8 Bit RPM conversion (Overflow)");
-
-            range = Math.floor(data / 0x40);
-            if (data == 0xFE) return 7862;
-            if (data == 0xFF) return 10054;
-            if (data == 0x1) return 514;
-            if (data == 0x0) return 0;
-
-            dividend = dividend >> range;
-            divisor = divisor - (divisor * range)
-
-            return Math.round(1875000 / (dividend / (data + divisor)));
+            if (data <= 1) return data;
+            if (data == 0xff) return Math.floor(1875000 / 0xBB) + 1;
+            for (band = 0; band < 3 && data < offset + 64; band++) {
+                dividend *= 2;
+                offset -= 64;
+            }
+            return Math.ceil(1875000 * (data - offset) / dividend);
         }
 
         // Convert RPM
@@ -985,9 +997,10 @@ Changelog:
             //Convert 16 bit RPM to word or back
             if (word) {
                 if (toRaw) {
-                    if (data >= 1875000) return 0x0000;      //Displayed for words below 30
-                    if (data <= 29) return 0xffff;           //Displayed for words above 0xFC8E
-                    return Math.min(0xffff, Math.round(1875000 / data));
+                    //Untouched cells keep their raw word (cellsToRaw), so typed RPM can be exact
+                    if (data != Math.floor(data)) return _invalidValue(data, "RPM must be a whole number.");
+                    if (data <= 0) return 0xffff;
+                    return Math.max(1, Math.min(0xffff, Math.round(1875000 / data)));
                 }
                 if (data > 0xfc8e) data = 0xffff;
                 if (data < 30) data = 1;
@@ -1139,12 +1152,13 @@ Changelog:
             if (word) return _invalidValue(data, "16 Bit Map conversion not available.");
 
             //Convert Map to 8 Bit byte
-            //Round after doubling, so odd bytes (one count is about 3.6 mBar) store exactly as displayed
-            if (toRaw) return Math.min(0xff, Math.round(((((data + 45) / 367) * 51) - 24) * 2));
+            //CP-023: the ROM's scale (label_447f: byte = (A/D word - 0x1800) / 0x80), with the stock sensor
+            //model -70 mBar at 0 V and 1790 mBar at 5 V
+            if (toRaw) return Math.max(0, Math.min(0xff, Math.round((((data + 70) / 1860 * 65536) - 0x1800) / 0x80)));
 
             //Convert byte to MAP
             if (data > 0xff) return _invalidValue(data, "8 Bit MAP conversion byte overflow");
-            return Math.round((((data / 2 + 24) / 51) * 367) - 45);
+            return Math.round(-70 + 1860 * (0x1800 + 0x80 * data) / 65536);
         }
 
         //Convert milliSeconds
@@ -1381,7 +1395,7 @@ Changelog:
                             <option value="0x5168,0x5176,2,1,7">[Tbl_5168] - TipinIgntionAdjustmentPerRPM</option>
                             <option value="0x50be,0x50c8,2,1,5">[Tbl_50be] - TipIn_InitialTPSThresholdFor_IAT_IGNAdj</option>
                             <option value="0x5310,0x532e,6,0,12">[Tbl_5310] - TipInFuelAddon_TPSDeltaVsRawFuel</option>
-                            <option value="0x532e,0x5346,6,0,80">[Tbl_532e] - TipInByGear_TPSDeltaVsFuelTrim</option>
+                            <option value="0x532e,0x5346,6,0,256">[Tbl_532e] - TipInByGear_TPSDeltaVsFuelTrim</option>
                             <option value="0x5346,0x534a,2,4,80">[Tbl_5346] - TipInFuelTrim_BaroAdj</option>
                             <option value="0x534a,0x5356,2,2,80">[Tbl_534a] - TipInFuelAddon_ECTOffset</option>
                             <option value="0,0,0,0,0">----------------------------------- Closed Loop Tables ---------------------------------------------</option>
@@ -1424,10 +1438,10 @@ Changelog:
                             <option value="0,0,0,0,0">----------------------------------- Idle Tables ----------------------------------------------------</option>
                             <option value="0x50c8,0x50dc,4,0,7">[Tbl_50c8] - LowIdleIgnControl</option>
                             <option value="0x50dc,0x50f0,4,0,7">[Tbl_50dc] - HiIdleIgnControl</option>
-                            <option value="0x559b,0x55a5,2,2,220">[Tbl_559b] - AlternatorIdleControl_AdjTrim</option>
+                            <option value="0x559b,0x55a5,2,2,40">[Tbl_559b] - AlternatorIdleControl_AdjTrim</option>
                             <option value="0x55a5,0x55af,2,1,40">[Tbl_55a5] - AltFieldIdleIndexMultiplier_RPMIndex</option>
                             <option value="0x55af,0x55c1,3,9,14">[Tbl_55af] - AlternatorIdleAdjustment_Raw</option>
-                            <option value="0x55c1,0x55d0,3,11,8000">[Tbl_55c1] - AC_IATIdleCompensation</option>
+                            <option value="0x55c1,0x55d0,3,11,80">[Tbl_55c1] - AC_IATIdleCompensation</option>
                             <option value="0x55d0,0x55da,2,1,14">[Tbl_55d0] - AC_IdleCompensationTbl</option>
                             <option value="0x5554,0x5556,1,14,0">[Tbl_5554] - MainIdleCompensationMIN</option>
                             <option value="0x5556,0x5558,1,14,0">[Tbl_5556] - MainIdleCompensationMAX</option>
