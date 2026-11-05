@@ -74,6 +74,11 @@ var address = {
     MAP_STOCK_5V_MBAR: 1790,
     MAP_STOCK_OFFSET_MIN_ADC: 0x1880,
     MAP_STOCK_OFFSET_MAX_ADC: 0x9780,
+    MAP_OFFSET_ZERO_ADC: 0x1800,                                // ADC reading where the ROM's offset MAP / BARO byte is 0x00 (label_447f subtracts 0x18 from the high byte)
+    MAP_OFFSET_ADC_PER_BYTE: 0x80,                              // ADC counts per step of the offset MAP / BARO byte (label_447f doubles the result)
+    MAP_SENSOR_INFO_BIAS: 0x8000,                               // Added to mBar when a sensor range is stored as a word
+    MAP_ADC_FULL_SCALE: 0x10000,                                // ADC counts from 0v to 5v, in the 16 bit format the ROM stores
+    MAP_RAW_HIGH_BYTE_STEPS: 0x100,                             // Steps of the raw MAP high byte from 0v to 5v
     MAP_LOWER_THRESHOLD_LOC: 0x1F66,                            // Location for lowest valid MAP reading (Single High byte ADC)
     MAP_UPPER_THRESHOLD_LOC: 0x1F62,                            // Location for highest valid MAP reading (Single High byte ADC)
     MAP_COL_FUNC_HOOK_LOC: 0x2212,                              // Code to create raw map col and fractional col called from this location
@@ -92,8 +97,10 @@ var address = {
     ALT_VTEC_PORTB_LOC: 0x73C2,                                 // ROM Location that will be copied to Port B register used for Alt VTEC outputs
     RP_FORCE_JMPR_FUNC_LOC_MAIN: 0x73E0,                        // RP Jumper custom code location 
     IGN_CUT_MAIN_FUNC_LOC: 0x7400,                              // Ignition cut function location 
-    RAW_BARO_COLUMN_PATCH_LOC: 0x7420,
+    RAW_BARO_COLUMN_PATCH_LOC: 0x7420,                          // Boost: ignition column fallback code (14 bytes)
+    RAW_FUEL_COLUMN_PATCH_LOC: 0x742E,                          // Boost: fuel column code (17 bytes). ROMs boosted before CP-028 have 6 bytes at 0x742D
     FUEL_BOUNDARY_SKIP_ON_BOOST_PATCH_LOC: 0x7440,              // Patch location used to skip fuel table value thresholds while boosted
+    OFFSET_TO_AXIS_RAW_FUNC_LOC: 0x7450,                        // Boost: converts an offset MAP / BARO byte to the raw axis scale (9 bytes). Blank on ROMs boosted before CP-028
     DISABLE_FUEL_ADJ_CUSTOM_CODE_LOC: 0x7460,                   // Code patch to bypass fuel compensations
     CUSTOM_MAP_SENSOR_HANDLER_LOC: 0x7480,                      // Location for custom MAP sensor function
     MAP_USING_OFFSET_SCALARS_LOC: 0x7FBD,                       // Bool for using offset MAP scalars location
@@ -123,6 +130,14 @@ var address = {
     DL_STATUS_BYTE_2: 0x3f0,                                    // Location used to make digital status bytes compatible with Crome / HTS Loggers (003b1h)
     DL_STATUS_BYTE_3: 0x3f0,                                    // Location used to make digital status bytes compatible with Crome / HTS Loggers (003b2h)
     DL_STATUS_BYTE_4: 0x3f0,                                    // Location used to make digital status bytes compatible with Crome / HTS Loggers (003b3h)
+    RAM_BARO_OFFSET: 0xE0,                                      // BARO as an offset byte. Fault-free BARO reading used by the column fallback
+    RAM_MAP_RAW_HIGH_BYTE: 0xA5,                                // High byte of the raw MAP ADC word at 0xA4. Boosted column input
+    RAM_FUEL_COLUMN_MAP: 0xE3,                                  // Filtered MAP byte the stock fuel column code stores at FUEL_COLUMN_MAP_HOOK_LOC
+    RAM_MAP_OFFSET: 0x288,                                      // MAP as an offset byte. On a code 3 or 5 the ROM stores a TPS-derived value here
+    RAM_ERROR_FLAGS: 0x210,                                     // Error code flags. Bit (code - 1) is set for that code
+    RAM_ERROR_CODE_3_BIT: 2,                                    // Code 3: MAP sensor
+    RAM_ERROR_CODE_5_BIT: 4,                                    // Code 5: MAP sensor
+    RAM_ACC_HIGH_BYTE: 0x07,                                    // ACCH SFR: high byte of the MULB result
     RAM_CUSTOM_RAM_FLAGS: 0xF9,                                 // Unused so far
 //************************************************************************ */
 
@@ -190,6 +205,13 @@ DefineAddresses: function(){
 
 
 }
+
+/** Constants inside the code at OFFSET_TO_AXIS_RAW_FUNC_LOC: raw = ADDEND + ((offset * MULTIPLIER) >> 8)
+ *  They depend on the MAP sensor range, so they are rewritten whenever that range changes. */
+var offsetToAxisRaw = {
+    MULTIPLIER_LOC: address.OFFSET_TO_AXIS_RAW_FUNC_LOC + 1,                        // Operand of MOVB r0, #MULTIPLIER
+    ADDEND_LOC: address.OFFSET_TO_AXIS_RAW_FUNC_LOC + 7                             // Operand of ADDB A, #ADDEND
+};
 
 var mapSensor ={
     CUSTOM_MAP_NFO_MIN: address.CUSTOM_MAP_SENSOR_HANDLER_LOC,                      // Custom MAP sensor mBar value at 0v

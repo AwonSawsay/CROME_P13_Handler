@@ -27,6 +27,9 @@
 // Default mBar values for 6 new boost columns
 var MAP_DEFAULT_BOOST_COL_MBAR = [1161 , 1284 , 1407 , 1529 ,1652 , 1787];
 
+var CUSTOM_MAP_RANGE_NOT_BOOST_READY = "This MAP sensor range can't be used with boost columns. " +
+    "The sensor must read about 104 mBar or lower at 0V, and about 1035 mBar or higher at 5V.";
+
 /** Used to expand the fuel and igntion tables, and custom map sensor */
 function P13BoostHandler(){
     
@@ -42,6 +45,17 @@ function P13BoostHandler(){
         "\nWould you like to continue?"
     );
     if (yesBoost){
+        // Check the sensor range first, so a refused install writes nothing
+        var sensorMbar0V = address.MAP_STOCK_0V_MBAR;
+        var sensorMbar5V = address.MAP_STOCK_5V_MBAR;
+        if(rom.byteAt(mapSensor.USING_STOCK_MAP_SENSOR_LOC) === 0x00){
+            sensorMbar0V = rom.wordAt(mapSensor.CUSTOM_MAP_NFO_MIN) - address.MAP_SENSOR_INFO_BIAS;
+            sensorMbar5V = rom.wordAt(mapSensor.CUSTOM_MAP_NFO_MAX) - address.MAP_SENSOR_INFO_BIAS;
+        }
+        if(__offsetToAxisRawConstants(sensorMbar0V, sensorMbar5V) === null){
+            alert(CUSTOM_MAP_RANGE_NOT_BOOST_READY + "\nNo changes have been made to the ROM.");
+            return;
+        }
         rom.gup();
         var newTableWidth = 16;
         var stockMinmBarThreshold = 10;
@@ -51,7 +65,7 @@ function P13BoostHandler(){
         address.Refresh();                                                          // Update CROME addresses from ROM and refresh
         __updateMapScalars();                                                       // Add boost scalars then convert MAP scalars to use RAW adc high byte
         address.Refresh();                                                          // Update CROME addresses from ROM and refresh
-        __addRawMapPatches();                                                       // Add ROM code to use raw MAP for column and fractional column
+        __addRawMapPatches(sensorMbar0V, sensorMbar5V);                             // Add ROM code to use raw MAP for column and fractional column
         __addFuelBoundarySkip();                                                    // Add ROM code to skip the fuel table Max value check during boost
         rom.byteAt(address.TABLES_USING_STANDARD_SIZE) = 0x00;                      // Set flag to show that we are not using standard size tables
         P13.opt_toggleEGR(false);                                                   // Disable EGR 
@@ -240,62 +254,155 @@ function __updateMapScalars(){
 }
 
 /** Add ROM code to create a new column and fractional column for raw MAP */
-function __addRawMapPatches() { 
-    /** Update ROM to use raw MAP and raw baro for column calcs */
+function __addRawMapPatches(mbar0V, mbar5V) {
+    /** Update ROM to use raw MAP for column calcs.
+     *
+     * The boosted axis scalars are raw MAP high bytes, but BARO and the fault value for MAP only
+     * exist in the ROM as offset bytes. CP-028: while MAP has a fault, both columns must use a
+     * value that means the same pressure as the axis, on whichever sensor is fitted.
+     * The offset bytes are always on the stock scale because the custom MAP handler converts to it,
+     * while raw MAP is on the fitted sensor's scale. So they are converted at the point of use. */
 
-    var FUEL_COLUMN_MAP_HOOK_LOC = 0x2207;         
-    var IGNITION_COLUMN_MAP_PARAMETER_LOC = 0x2098;     
-    var IGNITION_COLUMN_BARO_HOOK_LOC = 0x208d;         
-    var MAP_ADC_HIGH_BYTE = 0xa5;
-    var LB_ZERO_PAGE_OPCODE = 0xf5;
-    var customPatchLocation = address.RAW_BARO_COLUMN_PATCH_LOC;
-    var RAW_BARO_HIGH_BYTE_ADDRESS = P13.addressToBytes(0x3d3);
-    
+    var FUEL_COLUMN_MAP_HOOK_LOC = 0x2207;
+    var IGNITION_COLUMN_MAP_PARAMETER_LOC = 0x2098;
+    var IGNITION_COLUMN_BARO_HOOK_LOC = 0x208d;
+    var IGNITION_COLUMN_STORE_LOC = 0x209a;             // label_209a: stores the column input
+    var IGNITION_COLUMN_NEXT_CHECK_LOC = 0x2092;        // label_2092: stock checks after the first fault bit
+
+    // 66207 opcodes used by the patches below
+    var LB_A_ZERO_PAGE = 0xF5;
+    var LB_A_OFF = 0xF4;
+    var STB_A_ZERO_PAGE = 0xD5;
+    var STB_A_R0 = 0x88;
+    var MOVB_R0_IMMEDIATE = 0x98;
+    var MULB_PREFIX = 0xA2;
+    var MULB_OPERATION = 0x34;
+    var ADDB_A_IMMEDIATE = 0x86;
+    var JBR_BIT_BASE = 0xD8;                            // JBR off(xx).n is JBR_BIT_BASE + n
+    var JBS_BIT_BASE = 0xE8;                            // JBS off(xx).n is JBS_BIT_BASE + n
+    var J_ABSOLUTE = 0x03;
+    var CAL_ABSOLUTE = 0x32;
+    var RT = 0x01;
+    var NOP = 0x00;
+
+    var ERROR_FLAGS_OFF = address.RAM_ERROR_FLAGS & 0xff;   // off() operand: low byte of the RAM address
+    var MAP_OFFSET_OFF = address.RAM_MAP_OFFSET & 0xff;
+    var J_LENGTH = 3;                                   // Bytes in J_ABSOLUTE and its address
+    var LB_OFF_LENGTH = 2;                              // Bytes in LB A, off(xx)
+    var CAL_LENGTH = 3;                                 // Bytes in CAL_ABSOLUTE and its address
+
+    var baroColumnLoc = address.RAW_BARO_COLUMN_PATCH_LOC;
+    var fuelColumnLoc = address.RAW_FUEL_COLUMN_PATCH_LOC;
+    var helperLoc = address.OFFSET_TO_AXIS_RAW_FUNC_LOC;
+    var baroColumnBytes = P13.addressToBytes(baroColumnLoc);
+    var fuelColumnBytes = P13.addressToBytes(fuelColumnLoc);
+    var helperBytes = P13.addressToBytes(helperLoc);
+    var storeBytes = P13.addressToBytes(IGNITION_COLUMN_STORE_LOC);
+    var nextCheckBytes = P13.addressToBytes(IGNITION_COLUMN_NEXT_CHECK_LOC);
+
     // OLD: LB A, 0e0h; JBS off(00210h).2, label_209a
     // NEW: J  baroColumn; NOP; NOP;
-    var hook = [0x03, P13.addressToBytes(customPatchLocation)[1], P13.addressToBytes(customPatchLocation)[0], 0x00, 0x00];
-    
-    /** Custom Patch to load raw baro into A 
-     * baroColumn:		MOV 	DP, #003d3h				; Raw baro high byte
-				        LB 		A, [DP]
-				        JBR     off(00210h).2, bc_return; Stock code flow overwritten by hook
-				        J 		label_209a				 
-        bc_return:		J       label_2092 */
+    var hook = [J_ABSOLUTE, baroColumnBytes[1], baroColumnBytes[0], NOP, NOP];
+
+    /** Ignition column fallback. The result in A is only used while MAP has a fault: with no fault
+     *  the stock code goes on to IGNITION_COLUMN_MAP_PARAMETER_LOC and loads raw MAP instead.
+     *
+     * baroColumn:      LB      A, 0e0h                 ; BARO as an offset byte (stock scale)
+     *                  CAL     offsetToAxisRaw         ; Convert to the scale of the raw MAP axis
+     *                  JBR     off(00210h).2, bc_return; Stock code flow overwritten by hook
+     *                  J       label_209a
+     * bc_return:       J       label_2092 */
     var baroCustomPatch = [
-        0x62, RAW_BARO_HIGH_BYTE_ADDRESS[1], RAW_BARO_HIGH_BYTE_ADDRESS[0], 0xF2, 0xDA, 0x10, 0x03, 0x03,
-		0x9A, 0x20, 0x03, 0x92, 0x20
+        LB_A_ZERO_PAGE, address.RAM_BARO_OFFSET,
+        CAL_ABSOLUTE, helperBytes[1], helperBytes[0],
+        JBR_BIT_BASE + address.RAM_ERROR_CODE_3_BIT, ERROR_FLAGS_OFF, J_LENGTH,
+        J_ABSOLUTE, storeBytes[1], storeBytes[0],
+        J_ABSOLUTE, nextCheckBytes[1], nextCheckBytes[0]
     ];
-    
+
     // Write BARO column patch
-    P13.rom_write(customPatchLocation, baroCustomPatch, baroCustomPatch.length);
+    P13.rom_write(baroColumnLoc, baroCustomPatch, baroCustomPatch.length);
 
     // Write BARO hook
     P13.rom_write(IGNITION_COLUMN_BARO_HOOK_LOC, hook, hook.length)
-    
-    /**Custom patch to use raw MAP high byte for fuel column 
-    fuelMapPatch:
-                STB     A, 0e3h         
-                LB      A, 0a5h         ; Get MAP High byte
-                STB     A, r0           ; Stock code that hook overwrote
-                RT
-    */
-    
-    var fuelCustomPatchLoc = address.RAW_BARO_COLUMN_PATCH_LOC + baroCustomPatch.length;                
-    var fuelMapCustomPatch =[
-        0xD5, 0xE3, LB_ZERO_PAGE_OPCODE, MAP_ADC_HIGH_BYTE, 0x88, 0x01 
+
+    /** Fuel column. Raw MAP normally. With a MAP fault raw MAP is the failed reading, so use the
+     *  value the stock ROM substitutes for it at 00288h (derived from TPS), converted to the axis scale.
+     *
+     * fuelMapPatch:    STB     A, 0e3h                 ; Stock code that hook overwrote
+     *                  LB      A, 0a5h                 ; Get MAP High byte
+     *                  JBS     off(00210h).2, fm_fault ; Code 3?
+     *                  JBR     off(00210h).4, fm_store ; Not code 5 either: keep raw MAP
+     * fm_fault:        LB      A, off(00288h)          ; Value the ROM substitutes during a MAP fault
+     *                  CAL     offsetToAxisRaw         ; Convert to the scale of the raw MAP axis
+     * fm_store:        STB     A, r0                   ; Stock code that hook overwrote
+     *                  RT */
+    var fuelMapCustomPatch = [
+        STB_A_ZERO_PAGE, address.RAM_FUEL_COLUMN_MAP,
+        LB_A_ZERO_PAGE, address.RAM_MAP_RAW_HIGH_BYTE,
+        JBS_BIT_BASE + address.RAM_ERROR_CODE_3_BIT, ERROR_FLAGS_OFF, J_LENGTH,
+        JBR_BIT_BASE + address.RAM_ERROR_CODE_5_BIT, ERROR_FLAGS_OFF, LB_OFF_LENGTH + CAL_LENGTH,
+        LB_A_OFF, MAP_OFFSET_OFF,
+        CAL_ABSOLUTE, helperBytes[1], helperBytes[0],
+        STB_A_R0,
+        RT
     ];
-    
+
     // Write fuel MAP parameter patch code
-    P13.rom_write(fuelCustomPatchLoc, fuelMapCustomPatch, fuelMapCustomPatch.length);
-    
+    P13.rom_write(fuelColumnLoc, fuelMapCustomPatch, fuelMapCustomPatch.length);
+
     // Write fuel MAP parameter hook
-    P13.rom_write(FUEL_COLUMN_MAP_HOOK_LOC,  [0x32, P13.addressToBytes(fuelCustomPatchLoc)[1], P13.addressToBytes(fuelCustomPatchLoc)[0]], 3);
-    
+    P13.rom_write(FUEL_COLUMN_MAP_HOOK_LOC, [CAL_ABSOLUTE, fuelColumnBytes[1], fuelColumnBytes[0]], CAL_LENGTH);
+
+    /** Convert an offset MAP / BARO byte in A to the raw axis scale. Overwrites r0.
+     *  The multiplier and addend are placeholders here, set by __writeOffsetToAxisRawConstants.
+     *
+     * offsetToAxisRaw: MOVB    r0, #MULTIPLIER
+     *                  MULB                            ; ACC = A * r0
+     *                  LB      A, ACCH                 ; (A * MULTIPLIER) >> 8
+     *                  ADDB    A, #ADDEND
+     *                  RT */
+    var offsetToAxisRawCode = [
+        MOVB_R0_IMMEDIATE, 0x00,
+        MULB_PREFIX, MULB_OPERATION,
+        LB_A_ZERO_PAGE, address.RAM_ACC_HIGH_BYTE,
+        ADDB_A_IMMEDIATE, 0x00,
+        RT
+    ];
+    P13.rom_write(helperLoc, offsetToAxisRawCode, offsetToAxisRawCode.length);
+    __writeOffsetToAxisRawConstants(mbar0V, mbar5V);
+
     // Patch Ignition column parameter
     // OLD: LB A, off(00288h)   NEW: LB A, 0a5h
-    P13.rom_write(IGNITION_COLUMN_MAP_PARAMETER_LOC, [LB_ZERO_PAGE_OPCODE, MAP_ADC_HIGH_BYTE], 2)
+    P13.rom_write(IGNITION_COLUMN_MAP_PARAMETER_LOC, [LB_A_ZERO_PAGE, address.RAM_MAP_RAW_HIGH_BYTE], 2)
 
 
+}
+
+/** Multiplier and addend for the code at OFFSET_TO_AXIS_RAW_FUNC_LOC.
+ *  An offset byte is on the stock sensor's scale whichever sensor is fitted, and the result must be
+ *  a raw high byte on the fitted sensor's scale. Returns null if that range cannot be represented:
+ *  0v above the offset scale's start, a range too narrow for the multiplier, or a result past 0xFF. */
+function __offsetToAxisRawConstants(mbar0V, mbar5V){
+    var stockSpan = address.MAP_STOCK_5V_MBAR - address.MAP_STOCK_0V_MBAR;
+    var span = mbar5V - mbar0V;
+    var mbarAtOffsetZero = address.MAP_STOCK_0V_MBAR + stockSpan * address.MAP_OFFSET_ZERO_ADC / address.MAP_ADC_FULL_SCALE;
+    var multiplier = Math.round(address.MAP_OFFSET_ADC_PER_BYTE * stockSpan / span);
+    var addend = Math.round((mbarAtOffsetZero - mbar0V) * address.MAP_RAW_HIGH_BYTE_STEPS / span);
+    if (addend < 0 || multiplier > 0xff || addend + ((0xff * multiplier) >> 8) > 0xff) return null;
+    return {multiplier: multiplier, addend: addend};
+}
+
+/** Write the constants for the given sensor range. The range must already have been checked. */
+function __writeOffsetToAxisRawConstants(mbar0V, mbar5V){
+    var constants = __offsetToAxisRawConstants(mbar0V, mbar5V);
+    rom.byteAt(offsetToAxisRaw.MULTIPLIER_LOC) = constants.multiplier;
+    rom.byteAt(offsetToAxisRaw.ADDEND_LOC) = constants.addend;
+}
+
+/** True if this ROM has the conversion code. ROMs boosted before CP-028 do not, and keep their old fallback. */
+function __hasOffsetToAxisRaw(){
+    return rom.byteAt(address.OFFSET_TO_AXIS_RAW_FUNC_LOC) !== 0xff;
 }
 
 /** Add patch code to ROM to skip Fuel Table Max threshold check when boosted */
@@ -458,6 +565,7 @@ function __setCustomMapSensor(mbar0V, mbar5V, mbarMIN, mbarMAX){
         }
     }
     if (mbar5V <= mbar0V) throw new Error("Custom MAP sensor: mBar at 5V must be greater than mBar at 0V.");
+    if (__hasOffsetToAxisRaw() && __offsetToAxisRawConstants(mbar0V, mbar5V) === null) throw new Error(CUSTOM_MAP_RANGE_NOT_BOOST_READY);
 
     // Install custom MAP code if not already done
     if(rom.byteAt(mapSensor.USING_STOCK_MAP_SENSOR_LOC) !== 0x00 ){
@@ -486,6 +594,8 @@ function __setCustomMapSensor(mbar0V, mbar5V, mbarMIN, mbarMAX){
     // Update scalars before updating CROME MAP Info
     if(rom.byteAt(address.MAP_USING_OFFSET_SCALARS_LOC) === 0x00){
     __updateMapScalars();
+    // The column fallback converts to this sensor's scale, so it must follow the new range
+    if(__hasOffsetToAxisRaw()) __writeOffsetToAxisRawConstants(mbar0V, mbar5V);
     }
 
     
